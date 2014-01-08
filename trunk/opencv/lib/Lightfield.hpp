@@ -2,13 +2,8 @@
 #include <exception>
 #include <opencv2/opencv.hpp>
 
-#include <iostream>
-// FIXME remove iostream
-
-using namespace cv;
-using namespace std;
-
 class Lightfield {
+  typedef cv::Mat Mat; // "using" rejected by gcc
   Mat sum;
   Mat count;
   Mat alpha_ones;
