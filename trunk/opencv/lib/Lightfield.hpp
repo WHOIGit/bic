@@ -3,7 +3,8 @@
 #include <opencv2/opencv.hpp>
 
 class Lightfield {
-  typedef cv::Mat Mat; // "using" rejected by gcc
+  typedef cv::Mat Mat;
+  typedef std::string string; 
   Mat sum;
   Mat count;
   Mat alpha_ones;
@@ -44,13 +45,14 @@ public:
     assert(image.size().height == average.size().height);
     assert(image.size().width == average.size().width);
     double minLightmap, maxLightmap;
-    minMaxLoc(average, &minLightmap, &maxLightmap);
+    cv::minMaxLoc(average, &minLightmap, &maxLightmap);
     // perform correction
     Mat image32f;
     image.convertTo(image32f, CV_32F);
     return (image32f / average) * (maxLightmap - minLightmap);
   }
   void save(string pathname) {
+    using cv::Rect;
     // FIXME assert that the path ends ".tif" or equiv
     Mat average = getAverage();
     Mat composite;
@@ -63,10 +65,11 @@ public:
     count.copyTo(bottom);
     Mat composite_16u;
     composite.convertTo(composite_16u, CV_16U);
-    imwrite(pathname, composite_16u);
+    cv::imwrite(pathname, composite_16u);
   }
   void load(string pathname) {
-    Mat composite_16u = imread(pathname, CV_LOAD_IMAGE_ANYDEPTH);
+    using cv::Rect;
+    Mat composite_16u = cv::imread(pathname, CV_LOAD_IMAGE_ANYDEPTH);
     assert(composite_16u.type() == CV_16U);
     int h = composite_16u.size().height / 2;
     int w = composite_16u.size().width;
