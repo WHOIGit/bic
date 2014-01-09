@@ -1,8 +1,6 @@
 #pragma once
 #include <pthread.h>
 
-using namespace std;
-
 // provides a mutex and single monitor (condition) associated
 // with an aribtrary data object, as well as setters and getters.
 // callers are responsible for using locking and signalling
