@@ -1,14 +1,9 @@
 #include <opencv2/opencv.hpp>
+#include <boost/algorithm/string.hpp>
 #include "demosaic.hpp"
 
 using namespace cv;
 using namespace std;
-
-void show_range(const Mat& img_in, string prefix) {
-  double minVal, maxVal;
-  minMaxLoc(img_in, &minVal, &maxVal, NULL, NULL);
-  cout << prefix << " range = (" << minVal << "," << maxVal << ")" << endl;
-}
 
 string str_tolower(string in) {
   string out;
@@ -74,7 +69,7 @@ Mat demosaic_hqlinear(Mat image_in, string cfaPattern) {
   w = S.width;
 
   // Bayer pattern
-  cfaPattern = str_tolower(cfaPattern);
+  boost::to_lower(cfaPattern);
 
   // construct G channel
   Mat G;
@@ -167,4 +162,3 @@ Mat demosaic_hqlinear(Mat image_in, string cfaPattern) {
   color.convertTo(out, image_in.depth());
   return out;
 }
-
