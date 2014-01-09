@@ -77,7 +77,7 @@ public:
     composite_16u.convertTo(composite, CV_32F);
     Mat top(composite, Rect(0, 0, w, h));
     Mat bottom(composite, Rect(0, h, w, h));
-    init(top); // initialize accumulation matricies
+    init(top); // initialize accumulation matrices
     top.copyTo(sum);
     bottom.copyTo(count);
     sum = sum.mul(count);
