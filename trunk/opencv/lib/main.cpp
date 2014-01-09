@@ -15,23 +15,58 @@ using namespace cv;
 #define OUT_DIR "out"
 #define N_THREADS 8
 
-class Job {
+class LearnJob {
 public:
   string inpath;
-  string outpath;
   bool stop;
-  Job(string inp, string outp) {
+  LearnJob(String inp) {
     inpath = inp;
-    outpath = outp;
+    stop = false;
   }
-  Job() {
+  LearnJob() {
     stop = true;
   }
 };
 
-void correct_worker(Lightfield *model, ThreadsafeQueue<Job>* queue) {
-  while(true) { // FIXME need some way to stop
-    Job job = queue->pop();
+void learn_worker(Lightfield *model, ThreadsafeQueue<LearnJob>* queue) {
+  static boost::mutex mutex;
+  while(true) {
+    LearnJob job = queue->pop();
+    if(job.stop) {
+      cout << "DONE with one thread" << endl;
+      return;
+    } else {
+      string inpath = job.inpath;
+      cout << "POPPED " << inpath << endl;
+      Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
+      cout << "Read " << inpath << endl;
+      {
+	boost::lock_guard<boost::mutex> lock(mutex);
+	model->addImage(cfa_LR);
+      }
+      cout << "Added " << inpath << endl;
+    }
+  }
+}
+
+class CorrectJob {
+public:
+  string inpath;
+  string outpath;
+  bool stop;
+  CorrectJob(string inp, string outp) {
+    inpath = inp;
+    outpath = outp;
+    stop = false;
+  }
+  CorrectJob() {
+    stop = true;
+  }
+};
+
+void correct_worker(Lightfield *model, ThreadsafeQueue<CorrectJob>* queue) {
+  while(true) {
+    CorrectJob job = queue->pop();
     if(job.stop) {
       cout << "DONE with one thread" << endl;
       return;
@@ -54,18 +89,28 @@ int main(int argc, char** argv) {
   string inpath;
   Lightfield model;
   if(string(argv[1]) == "learn") {
+    ThreadsafeQueue<LearnJob> work;
+    boost::thread_group workers;
     while(getline(inpaths,inpath)) {
-      cout << "Learning " << inpath << endl;
-      Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
-      model.addImage(cfa_LR);
+      work.push(LearnJob(inpath));
+      cout << "PUSHED " << inpath << endl;
     }
+    for(int i = 0; i < N_THREADS; i++) {
+      boost::thread* worker = new boost::thread(learn_worker, &model, &work);
+      workers.add_thread(worker);
+    }
+    for(int i = 0; i < N_THREADS; i++) {
+      work.push(LearnJob()); // tell thread to stop
+    }
+    workers.join_all();
+    cout << "Saving lightmap" << endl;
     model.save("model.tiff");
   } else if(string(argv[1]) == "correct") {
+    cout << "Loading lightmap" << endl;
     model.load("model.tiff");
-    cout << "Loaded model" << endl;
     int count = 0;
     ifstream inpaths2(PATH_FILE);
-    ThreadsafeQueue<Job> work;
+    ThreadsafeQueue<CorrectJob> work;
     boost::thread_group workers;
     for(int i = 0; i < N_THREADS; i++) {
       boost::thread* worker = new boost::thread(correct_worker, &model, &work);
@@ -76,14 +121,15 @@ int main(int argc, char** argv) {
       string outpath;
       outpaths << "out/correct" << count << ".tiff";
       outpath = outpaths.str();
-      work.push(Job(inpath,outpath));
+      work.push(CorrectJob(inpath,outpath));
       cout << "PUSHED " << inpath << endl;
       count++;
     }
     for(int i = 0; i < N_THREADS; i++) {
-      work.push(Job()); // tell thread to stop
+      work.push(CorrectJob()); // tell thread to stop
     }
     workers.join_all();
   }
+  cout << "SUCCESS" << endl;
   return 0;
 }
