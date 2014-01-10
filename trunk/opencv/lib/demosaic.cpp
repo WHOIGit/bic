@@ -5,7 +5,7 @@
 using namespace cv;
 using namespace std;
 
-string str_tolower(string in) {
+string str_tolower(string in) { // FIXME dead code
   string out;
   out.append(in);
   transform(out.begin(), out.end(), out.begin(), ::tolower);
@@ -52,8 +52,9 @@ Mat ratg_rcol_kern(string cfa) {
 	  C, D);
 }
 
-Mat demosaic_hqlinear(Mat image_in, string cfaPattern) {
-  // now convert to floating point, if necessary
+Mat demosaic(Mat image_in, string cfaPattern) {
+  // "High Quality Linear" (Malvar et al)
+  // convert to floating point, if necessary
   Mat image;
   if(image.depth()==CV_32F) {
     image = image_in;
