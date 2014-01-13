@@ -4,11 +4,13 @@
 #include <opencv2/opencv.hpp>
 
 #include "demosaic.hpp"
-#include "Lightfield.hpp"
+#include "illumination.hpp"
 #include "threadutils.hpp"
 
 using namespace std;
 using namespace cv;
+
+using illum::Lightfield;
 
 // this is a prototype application; code is not in reusable state yet
 
@@ -79,6 +81,9 @@ public:
 
 // the learn worker accepts jobs from a queue and corrects images
 void correct_worker(Lightfield *model, AsyncQueue<CorrectJob>* queue) {
+  // here we assume it is safe to read the average image from the model.
+  // it would not be safe if learning was underway when we did this.
+  Mat lightfield = model->getAverage();
   while(true) {
     // pop a job atomically
     CorrectJob job = queue->pop();
@@ -90,7 +95,7 @@ void correct_worker(Lightfield *model, AsyncQueue<CorrectJob>* queue) {
     string inpath = job.inpath;
     string outpath = job.outpath;
     cout << "POPPED " << inpath << endl;
-    Mat cfa_LR = model->correct(imread(inpath, CV_LOAD_IMAGE_ANYDEPTH));
+    Mat cfa_LR = illum::correct(imread(inpath, CV_LOAD_IMAGE_ANYDEPTH), lightfield);
     cout << "Demosaicing " << inpath << endl;
     Mat rgb_LR = demosaic(cfa_LR,"rgGb");
     cout << "Saving RGB to " << outpath << endl;

@@ -1,7 +1,11 @@
 #pragma once
 #include <cmath>
 
-template <typename T> class LinearBinning {
+namespace interp {
+  template <typename T> class LinearBinning;
+}
+
+template <typename T> class interp::LinearBinning {
 private:
   std::vector<T> bins;
 public:

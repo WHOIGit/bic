@@ -2,6 +2,9 @@
 #include <exception>
 #include <opencv2/opencv.hpp>
 
+#include "interpolation.hpp"
+#include "threadutils.hpp"
+
 /**
  * Use Lightfield to accumulate a frame average from multiple images
  * that are the same size, and then "correct" images by dividing them
@@ -28,7 +31,13 @@
  * format.
  */
 // FIXME does this work with color images?
-class Lightfield {
+namespace illum {
+  class Lightfield;
+  template <typename T> class MultiLightfield;
+  cv::Mat correct(cv::Mat, cv::Mat);
+};
+
+class illum::Lightfield {
   typedef cv::Mat Mat;
   typedef std::string string; 
   Mat sum; // running sum
@@ -89,24 +98,6 @@ public:
     return sum / count;
   }
   /**
-   * Correct an image by dividing it by the average image.
-   *
-   * @param image the image
-   * @return a new, correctly-illuminated image
-   */
-  Mat correct(Mat image) {
-    Mat average = getAverage();
-    assert(image.size().height == average.size().height);
-    assert(image.size().width == average.size().width);
-    Mat image32f;
-    image.convertTo(image32f, CV_32F); // convert to floating point
-    // find intensity range of average image
-    double minLightmap, maxLightmap;
-    cv::minMaxLoc(average, &minLightmap, &maxLightmap);
-    // divide image by average, then normalize to intensity range of average
-    return (image32f / average) * (maxLightmap - minLightmap);
-  }
-  /**
    * Save the lightfield to an image file. The image file will contain
    * both average and count information, so will be twice the
    * dimensions of the input images.
@@ -156,5 +147,86 @@ public:
     bottom.copyTo(count);
     // and renormalize the average image to the count
     sum = sum.mul(count);
+  }
+};
+
+// type parameter is the numerical type used for representing altitude
+template <typename T> class Slice: public HasMutex {
+private:
+  illum::Lightfield lf; // model for this altitude
+  T a; // altitude
+public:
+  Slice(T alt) {
+    a = alt;
+  }
+  illum::Lightfield getLightfield() {
+    return lf;
+  }
+  T getAlt() {
+    return a;
+  }
+};
+
+template <typename T> class illum::MultiLightfield {
+private:
+  typename interp::LinearBinning<T> binning;
+  typename std::vector<Slice<T> > slices;
+  Slice<T> getSlice(T alt) {
+    typename std::vector<Slice<T> >::iterator it = slices.begin();
+    for(; it != slices.end(); ++it) {
+      Slice<T> slice = *it;
+      if(slice.getAlt() == alt) {
+	return slice;
+      }
+    }
+  }
+public:
+  MultiLightfield(T low, T high, T width) {
+    binning = interp::LinearBinning<T>(low, high, width);
+    std::vector<T> bins = binning.getBins();
+    typename std::vector<T>::iterator it = bins.begin();
+    for(; it != bins.end(); ++it) {
+      slices.push_back(Slice<T>(*it));
+    }
+  }
+  void addImage(cv::Mat image, T alt) {
+    std::vector<std::pair<T,double> > result = binning.interpolate(alt);
+    typename std::vector<T>::iterator it = result.begin();
+    for(; it != result.end(); ++it) {
+      std::pair<T,double> p = *it;
+      T sAlt = p.first; // altitude
+      double alpha = p.second; // contribution to this altitude's slice
+      if(alpha > 0) {
+	Slice<T> slice = getSlice(sAlt);
+	{ // now lock this slice
+	  boost::mutex::scoped_lock lock(slice.getMutex());
+	  slice.getLightfield().addImage(image, alpha);
+	  break;
+	}
+      }
+    }
+  }
+  cv::Mat getAverage(T alt) {
+    // FIXME no way of caching average images per-slice
+    cv::Mat average;
+    std::vector<std::pair<T,double> > result = binning.interpolate(alt);
+    typename std::vector<T>::iterator it = result.begin();
+    for(; it != result.end(); ++it) {
+      std::pair<T,double> p = *it;
+      T sAlt = p.first; // altitude
+      double alpha = p.second; // contribution to this altitude's slice
+      if(alpha > 0) {
+	// nonzero contribution. find the slice
+	Slice<T> slice = getSlice(sAlt);
+	cv::Mat sAverage = slice.getAverage();
+	if(average.empty()) {
+	  int h = sAverage.size().height;
+	  int w = sAverage.size().width;
+	  average.create(h, w, CV_32F);
+	}
+	average += sAverage.mul(alpha);
+      }
+    }
+    return average;
   }
 };
