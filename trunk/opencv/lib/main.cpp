@@ -15,12 +15,12 @@ int main(int argc, char **argv) {
     correct_prototype();
   }
   */
-  LinearBinning<double> bins = LinearBinning<double>(0,2,0.15);
-  typedef vector<pair<double, double> > interp_t;
-  interp_t result = bins.interpolate(1.234);
+  LinearBinning<int> bins = LinearBinning<int>(0,100,7);
+  typedef vector<pair<int, double> > interp_t;
+  interp_t result = bins.interpolate(31);
   interp_t::iterator it = result.begin();
   for(; it != result.end(); ++it) {
-    pair<double,double> p = *it;
+    pair<int,double> p = *it;
     cout << p.first << ": " << p.second << endl;
   }
 }
