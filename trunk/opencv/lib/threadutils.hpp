@@ -6,10 +6,12 @@
  * Simple class bearing a mutex
  */
 class HasMutex {
-protected:
+private:
   boost::mutex mutex;
 public:
-  boost::mutex getMutex(): return mutex;
+  boost::mutex& getMutex() {
+    return mutex;
+  }
 };
 
 /**

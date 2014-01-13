@@ -18,14 +18,16 @@ using namespace cv;
 #define OUT_DIR "out"
 #define N_THREADS 8
 
-// a learn job just specifies an input pathname
+// a learn job just specifies an input pathname and an altitude
 // or its stop flag is true, telling the worker to stop
 class LearnJob {
 public:
   string inpath;
+  float altitude;
   bool stop;
-  LearnJob(String inp) {
+  LearnJob(String inp, float alt=1.5) {
     inpath = inp;
+    altitude = alt;
     stop = false;
   }
   LearnJob() {

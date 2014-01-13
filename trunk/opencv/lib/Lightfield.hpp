@@ -1,6 +1,5 @@
 #pragma once
 #include <exception>
-#include <boost/thread.hpp>
 #include <opencv2/opencv.hpp>
 
 /**
