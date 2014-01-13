@@ -5,7 +5,7 @@
 
 #include "demosaic.hpp"
 #include "Lightfield.hpp"
-#include "ThreadsafeQueue.hpp"
+#include "threadutils.hpp"
 
 using namespace std;
 using namespace cv;
@@ -34,7 +34,7 @@ public:
 };
 
 // the learn worker accepts jobs from a queue and adds them to a lightfield
-void learn_worker(Lightfield *model, ThreadsafeQueue<LearnJob>* queue) {
+void learn_worker(Lightfield *model, AsyncQueue<LearnJob>* queue) {
   static boost::mutex mutex; // shared lock for lightfield
   while(true) { // indefinitely,
     // atomically receive a job (this will block if the queue is empty,
@@ -76,7 +76,7 @@ public:
 };
 
 // the learn worker accepts jobs from a queue and corrects images
-void correct_worker(Lightfield *model, ThreadsafeQueue<CorrectJob>* queue) {
+void correct_worker(Lightfield *model, AsyncQueue<CorrectJob>* queue) {
   while(true) {
     // pop a job atomically
     CorrectJob job = queue->pop();
@@ -103,7 +103,7 @@ void learn_prototype() {
   ifstream inpaths(PATH_FILE);
   string inpath;
   Lightfield model; // lightfield
-  ThreadsafeQueue<LearnJob> work; // job queue
+  AsyncQueue<LearnJob> work; // job queue
   boost::thread_group workers; // workers
   // first, push all the work onto the queue
   while(getline(inpaths,inpath)) { // read pathames from a file
@@ -139,7 +139,7 @@ void correct_prototype() {
   int count = 0;
   ifstream inpaths2(PATH_FILE);
   // add all the jobs (see learn_prototype for how this works)
-  ThreadsafeQueue<CorrectJob> work;
+  AsyncQueue<CorrectJob> work;
   boost::thread_group workers;
   for(int i = 0; i < N_THREADS; i++) {
     boost::thread* worker = new boost::thread(correct_worker, &model, &work);

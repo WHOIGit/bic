@@ -1,5 +1,6 @@
 #pragma once
 #include <exception>
+#include <boost/thread.hpp>
 #include <opencv2/opencv.hpp>
 
 /**
@@ -61,7 +62,7 @@ public:
     assert(image.size().height == alpha.size().height);
     assert(image.size().width == alpha.size().width);
     Mat image32f;
-    image.convertTo(image32f, CV_32F); // convert to floatin point
+    image.convertTo(image32f, CV_32F); // convert to floating point
     sum += image32f.mul(alpha); // multiply by alpha and add to sum image
     count += alpha; // add alpha channel to count image
   }
