@@ -33,7 +33,6 @@ class Lightfield {
   typedef std::string string; 
   Mat sum; // running sum
   Mat count; // running count (fractional)
-  Mat alpha_ones; // alpha channel that is all ones
   // lazy initialization based on size of first image
   void init(Mat image) {
     if(sum.empty()) {
@@ -41,8 +40,12 @@ class Lightfield {
       int w = image.size().width;
       sum = Mat::zeros(h, w, CV_32F);
       count = Mat::zeros(h, w, CV_32F);
-      alpha_ones = Mat::ones(h, w, CV_32F);
     }
+  }
+  void validate(Mat image) {
+    init(image);
+    assert(image.size().height == sum.size().height);
+    assert(image.size().width == sum.size().width);
   }
 public:
   Lightfield() { }
@@ -54,24 +57,25 @@ public:
    *   image to the average per-pixel
    */
   void addImage(Mat image, Mat alpha) {
-    init(image);
-    assert(image.size().height == sum.size().height);
-    assert(image.size().width == sum.size().width);
+    validate(image);
     assert(image.size().height == alpha.size().height);
     assert(image.size().width == alpha.size().width);
     Mat image32f;
     image.convertTo(image32f, CV_32F); // convert to floatin point
     sum += image32f.mul(alpha); // multiply by alpha and add to sum image
-    count += alpha_ones; // add alpha channel to count image
+    count += alpha; // add alpha channel to count image
   }
   /**
    * Add an image to the running total.
    *
    * @param image the image to add
    */
-  void addImage(Mat image) {
-    init(image);
-    addImage(image, alpha_ones); // assumes alpha image is all ones
+  void addImage(Mat image, double alpha=1.0) {
+    validate(image);
+    Mat image32f;
+    image.convertTo(image32f, CV_32F); // convert to floatin point
+    sum += image32f * alpha; // multiply by alpha and add to sum image
+    count += alpha; // add alpha to count image
   }
   /**
    * Compute the average image and return it.
