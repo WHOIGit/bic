@@ -9,6 +9,7 @@ template <typename T> class interp::LinearBinning {
 private:
   std::vector<T> bins;
 public:
+  LinearBinning() { }
   LinearBinning(T low, T high, T width) {
     for(T v = low; v <= high; v += width) {
       bins.push_back(v);

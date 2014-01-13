@@ -1,9 +1,9 @@
 #pragma once
 #include <exception>
+#include <fstream>
 #include <opencv2/opencv.hpp>
 
 #include "interpolation.hpp"
-#include "threadutils.hpp"
 
 /**
  * Use Lightfield to accumulate a frame average from multiple images
@@ -58,6 +58,12 @@ class illum::Lightfield {
   }
 public:
   Lightfield() { }
+  /**
+   * Is this lightfield empty or uninitialized?
+   */
+  bool empty() {
+    return sum.empty();
+  }
   /**
    * Add an image to the running total.
    *
@@ -151,7 +157,7 @@ public:
 };
 
 // type parameter is the numerical type used for representing altitude
-template <typename T> class Slice: public HasMutex {
+template <typename T> class Slice {
 private:
   illum::Lightfield lf; // model for this altitude
   T a; // altitude
@@ -176,6 +182,7 @@ private:
     for(; it != slices.end(); ++it) {
       Slice<T> slice = *it;
       if(slice.getAlt() == alt) {
+	std::cout << "got slice for " << alt << std::endl;
 	return slice;
       }
     }
@@ -191,18 +198,15 @@ public:
   }
   void addImage(cv::Mat image, T alt) {
     std::vector<std::pair<T,double> > result = binning.interpolate(alt);
-    typename std::vector<T>::iterator it = result.begin();
+    typename std::vector<std::pair<T,double> >::iterator it = result.begin();
     for(; it != result.end(); ++it) {
       std::pair<T,double> p = *it;
       T sAlt = p.first; // altitude
       double alpha = p.second; // contribution to this altitude's slice
       if(alpha > 0) {
 	Slice<T> slice = getSlice(sAlt);
-	{ // now lock this slice
-	  boost::mutex::scoped_lock lock(slice.getMutex());
-	  slice.getLightfield().addImage(image, alpha);
-	  break;
-	}
+	slice.getLightfield().addImage(image, alpha);
+	break;
       }
     }
   }
@@ -210,7 +214,7 @@ public:
     // FIXME no way of caching average images per-slice
     cv::Mat average;
     std::vector<std::pair<T,double> > result = binning.interpolate(alt);
-    typename std::vector<T>::iterator it = result.begin();
+    typename std::vector<std::pair<T,double> >::iterator it = result.begin();
     for(; it != result.end(); ++it) {
       std::pair<T,double> p = *it;
       T sAlt = p.first; // altitude
@@ -218,7 +222,7 @@ public:
       if(alpha > 0) {
 	// nonzero contribution. find the slice
 	Slice<T> slice = getSlice(sAlt);
-	cv::Mat sAverage = slice.getAverage();
+	cv::Mat sAverage = slice.getLightfield().getAverage();
 	if(average.empty()) {
 	  int h = sAverage.size().height;
 	  int w = sAverage.size().width;
@@ -228,5 +232,21 @@ public:
       }
     }
     return average;
+  }
+  void save() {
+    // FIXME debug
+    int count = 0;
+    typename std::vector<Slice<T> >::iterator it = slices.begin();
+    for(; it != slices.end(); ++it, ++count) {
+      std::stringstream outpaths;
+      std::string outpath;
+      outpaths << "out/slice" << count << ".tiff";
+      outpath = outpaths.str();
+      Slice<T> slice = *it;
+      illum::Lightfield lf = slice.getLightfield();
+      if(!lf.empty()) {
+	slice.getLightfield().save(outpath);
+      }
+    }
   }
 };

@@ -3,25 +3,14 @@
 #include <boost/thread.hpp>
 
 /**
- * Simple class bearing a mutex
- */
-class HasMutex {
-private:
-  boost::mutex mutex;
-public:
-  boost::mutex& getMutex() {
-    return mutex;
-  }
-};
-
-/**
  * Threadsafe read/write access to a queue.
  * Both reads and writes synchronize on the same mutex.
  * Cribbed from 
  * http://thisthread.blogspot.com/2011/09/threadsafe-stdqueue.html
  */
-template <typename T> class AsyncQueue: public HasMutex {
+template <typename T> class AsyncQueue {
 private:
+  boost::mutex mutex;
   std::queue<T> q_;
   boost::condition_variable c_;
 public:
@@ -30,7 +19,7 @@ public:
    * @param data the item to push on the queue
    */
   void push(const T& data) {
-    boost::lock_guard<boost::mutex> l(getMutex()); // protect write access to queue
+    boost::lock_guard<boost::mutex> l(mutex); // protect write access to queue
     q_.push(data);
     c_.notify_one(); // notify waiting thread to wake up
   }
@@ -41,7 +30,7 @@ public:
    */
   T pop() {
     // scoped lock so we can wait on the condition variable
-    boost::mutex::scoped_lock l(getMutex());
+    boost::mutex::scoped_lock l(mutex);
     while(q_.empty()) {
 	c_.wait(l); // release lock and wait for notification
     }

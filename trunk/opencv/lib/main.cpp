@@ -19,9 +19,5 @@ void demoBinning() { // FIXME delete
 }
 
 int main(int argc, char **argv) {
-  if(string(argv[1])=="learn") {
-    learn_prototype();
-  } else {
-    correct_prototype();
-  }
+  learn_prototype();
 }
