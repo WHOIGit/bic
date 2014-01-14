@@ -207,6 +207,50 @@ Mat cfa_quad(Mat cfa) {
 }
 
 /**
+ * Given a mosaic of four half-resolution images containing pixels from
+ * each Bayer offset, i.e. an image laid out like this with respect to
+ * Bayer offsets x,y:
+ *
+ * +---+---+
+ * |0,0|1,0|
+ * +---+---+
+ * |0,1|1,1|
+ * +---+---+
+ *
+ * produce the full-resolution CFA image. This is the inverse operation
+ * of cfa_quad.
+ *
+ * @param cfa the image mosaic
+ */
+Mat quad_cfa(Mat quad) {
+  Mat remapped;
+  Mat xMap, yMap;
+  remapped.create(quad.size(), quad.type());
+  xMap.create(quad.size(), CV_32F);
+  yMap.create(quad.size(), CV_32F);
+
+  // build map
+  int c2 = quad.cols/2;
+  int r2 = quad.rows/2;
+  for(int x = 0; x < quad.cols; x++) {
+    for(int y = 0; y < quad.rows; y++) {
+      if(x % 2 == 0) {
+	xMap.at<float>(y,x) = x / 2;
+      } else {
+	xMap.at<float>(y,x) = c2 + ((x-1) / 2);
+      }
+      if(y % 2 == 0) {
+	yMap.at<float>(y,x) = y / 2;
+      } else {
+	yMap.at<float>(y,x) = r2 + ((y-1) / 2);
+      }
+    }
+  }
+  remap(quad,remapped,xMap,yMap,INTER_NEAREST);
+  return remapped;
+}
+
+/**
  * Return a 1/2-resolution image containing pixels at the given
  * bayer offset.
  *

@@ -39,6 +39,24 @@ cv::Mat demosaic(cv::Mat cfa, std::string cfaPattern="rggb");
 cv::Mat cfa_quad(cv::Mat cfa);
 
 /**
+ * Given a mosaic of four half-resolution images containing pixels from
+ * each Bayer offset, i.e. an image laid out like this with respect to
+ * Bayer offsets x,y:
+ *
+ * +---+---+
+ * |0,0|1,0|
+ * +---+---+
+ * |0,1|1,1|
+ * +---+---+
+ *
+ * produce the full-resolution CFA image. This is the inverse operation
+ * of cfa_quad.
+ *
+ * @param cfa the image mosaic
+ */
+cv::Mat quad_cfa(cv::Mat quad);
+
+/**
  * Return a half-resolution image containing pixels at the given
  * Bayer offset.
  *
