@@ -22,3 +22,28 @@
  * @return a new color (BGR) image
  */
 cv::Mat demosaic(cv::Mat cfa, std::string cfaPattern="rggb");
+
+/**
+ * Generate a mosaic of four half-resolution images containing pixels from
+ * each Bayer offset, i.e. an image laid out like this with respect to
+ * Bayer offsets x,y:
+ *
+ * +---+---+
+ * |0,0|1,0|
+ * +---+---+
+ * |0,1|1,1|
+ * +---+---+
+ *
+ * @param cfa the image
+ */
+cv::Mat cfa_quad(cv::Mat cfa);
+
+/**
+ * Return a half-resolution image containing pixels at the given
+ * Bayer offset.
+ *
+ * @param cfa the image
+ * @param x the x offset (0 or 1, default 0)
+ * @param y the y offset (0 or 1, default 0)
+ */
+cv::Mat cfa_channel(cv::Mat cfa, int x=0, int y=0);

@@ -163,3 +163,64 @@ Mat demosaic(Mat image_in, string cfaPattern) {
   color.convertTo(out, image_in.depth());
   return out;
 }
+
+/// utility
+/**
+ * Generate a mosaic of four half-resolution images containing pixels from
+ * each Bayer offset, i.e. an image laid out like this with respect to
+ * Bayer offsets x,y:
+ *
+ * +---+---+
+ * |0,0|1,0|
+ * +---+---+
+ * |0,1|1,1|
+ * +---+---+
+ *
+ * @param cfa the image
+ */
+Mat cfa_quad(Mat cfa) {
+  Mat remapped;
+  Mat xMap, yMap;
+  remapped.create(cfa.size(), cfa.type());
+  xMap.create(cfa.size(), CV_32F);
+  yMap.create(cfa.size(), CV_32F);
+
+  // build map
+  int c2 = cfa.cols/2;
+  int r2 = cfa.rows/2;
+  for(int x = 0; x < cfa.cols; x++) {
+    for(int y = 0; y < cfa.rows; y++) {
+      if(x < c2) {
+	xMap.at<float>(y,x) = x * 2;
+      } else {
+	xMap.at<float>(y,x) = ((x - c2) * 2) + 1;
+      }
+      if(y < r2) {
+	yMap.at<float>(y,x) = y * 2;
+      } else {
+	yMap.at<float>(y,x) = ((y - r2) * 2) + 1;
+      }
+    }
+  }
+  remap(cfa,remapped,xMap,yMap,INTER_NEAREST);
+  return remapped;
+}
+
+/**
+ * Return a 1/2-resolution image containing pixels at the given
+ * bayer offset.
+ *
+ * @param cfa the image
+ * @param x the x offset (0 or 1, default 0)
+ * @param y the y offset (0 or 1, default 0)
+ */
+Mat cfa_channel(cv::Mat cfa, int x, int y) {
+  assert(x==0 || x==1);
+  assert(y==0 || y==1);
+  // now return just the requested quadrant
+  int w2 = cfa.cols/2;
+  int h2 = cfa.rows/2;
+  Mat roi(cfa_quad(cfa), Rect(w2*x,h2*y,w2,h2));
+  return roi;
+}
+
