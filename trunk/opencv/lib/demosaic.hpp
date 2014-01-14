@@ -34,7 +34,8 @@ cv::Mat demosaic(cv::Mat cfa, std::string cfaPattern="rggb");
  * |0,1|1,1|
  * +---+---+
  *
- * @param cfa the image
+ * @param cfa the CFA image
+ * @return the channels mosaic
  */
 cv::Mat cfa_quad(cv::Mat cfa);
 
@@ -52,7 +53,8 @@ cv::Mat cfa_quad(cv::Mat cfa);
  * produce the full-resolution CFA image. This is the inverse operation
  * of cfa_quad.
  *
- * @param cfa the image mosaic
+ * @param cfa the channels mosaic
+ * @return the original CFA image
  */
 cv::Mat quad_cfa(cv::Mat quad);
 
@@ -63,5 +65,23 @@ cv::Mat quad_cfa(cv::Mat quad);
  * @param cfa the image
  * @param x the x offset (0 or 1, default 0)
  * @param y the y offset (0 or 1, default 0)
+ *
+ * @return the channel image
  */
 cv::Mat cfa_channel(cv::Mat cfa, int x=0, int y=0);
+
+/**
+ * Smooth a Bayer-patterned image with a Gaussian filter, applying
+ * the filter to the four Bayer offsets independently.
+ *
+ * @param cfa the Bayer-patterned image
+ *
+ * @param ksize the kernel size. Use approximately half the kernel
+ * size you would use for a full-resolution image. Must be odd. Sigma
+ * will be computed from it using the following formula:
+ *
+ * 0.3*((ksize-1)*0.5 - 1) + 0.8;
+ *
+ * @return the smoothed CFA image
+ */
+cv::Mat cfa_smooth(cv::Mat cfa, int ksize);

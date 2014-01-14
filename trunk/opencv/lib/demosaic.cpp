@@ -268,3 +268,31 @@ Mat cfa_channel(cv::Mat cfa, int x, int y) {
   return roi;
 }
 
+/**
+ * Smooth a Bayer-patterned image with a Gaussian filter, applying
+ * the filter to the four Bayer offsets independently.
+ *
+ * @param cfa the Bayer-patterned image
+ *
+ * @param ksize the kernel size. Use approximately half the kernel
+ * size you would use for a full-resolution image. Must be odd. Sigma
+ * will be computed from it using the following formula:
+ *
+ * 0.3*((ksize-1)*0.5 - 1) + 0.8;
+ *
+ * @return the smoothed CFA image
+ */
+Mat cfa_smooth(Mat cfa, int ksize) {
+  int w2 = cfa.size().width / 2;
+  int h2 = cfa.size().height / 2;
+  Mat quad = cfa_quad(cfa);
+  double sigma = 0.3*((ksize-1)*0.5 - 1) + 0.8;
+  for(int x = 0; x < 2; x++) {
+    for(int y = 0; y < 2; y++) {
+      Rect roi = Rect(x*w2,y*h2,w2,h2);
+      Mat q(quad, roi);
+      GaussianBlur(q,q,Size(ksize,ksize),sigma);
+    }
+  }
+  return quad_cfa(quad);
+}

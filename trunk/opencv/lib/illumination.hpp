@@ -212,7 +212,6 @@ public:
     }
   }
   cv::Mat getAverage(T alt) {
-    // FIXME no way of caching average images per-slice
     cv::Mat average;
     std::vector<std::pair<T,double> > result = binning.interpolate(alt);
     typename std::vector<std::pair<T,double> >::iterator it = result.begin();

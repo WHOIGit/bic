@@ -4,6 +4,7 @@
 #include <opencv2/opencv.hpp>
 #include "prototype.hpp"
 #include "interpolation.hpp"
+#include "demosaic.hpp"
 
 using namespace std;
 
@@ -19,5 +20,10 @@ void demoBinning() { // FIXME delete
 }
 
 int main(int argc, char **argv) {
-  learn_prototype();
+  //learn_prototype();
+  using namespace cv;
+  Mat cfa = imread(argv[1],CV_LOAD_IMAGE_ANYDEPTH);
+  cfa = cfa_smooth(cfa,31);
+  imwrite("cfa_smooth.tiff",cfa);
+  imwrite("rgb_smooth.tiff",demosaic(cfa,"rggb"));
 }

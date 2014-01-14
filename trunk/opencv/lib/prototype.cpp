@@ -19,7 +19,7 @@ using illum::MultiLightfield;
 #define PATH_FILE "alts.csv"
 #define MODEL_FILE "model.tiff"
 #define OUT_DIR "out"
-#define N_THREADS 8
+#define N_THREADS 12
 
 // a learn job just specifies an input pathname and an altitude
 // or its stop flag is true, telling the worker to stop
@@ -154,16 +154,19 @@ void learn_prototype() {
   ifstream inpaths2(PATH_FILE);
   int count = 0;
   while(getline(inpaths2,line)) {
-    Tokenizer tok(line);
-    fields.assign(tok.begin(),tok.end());
-    string inpath = fields.front();
-    int alt = (int)(atof(fields.back().c_str()) * 100);
-    stringstream outpaths;
-    string outpath;
-    outpaths << "out/correct" << count << ".tiff";
-    outpath = outpaths.str();
-    cwork.push(CorrectJob(inpath,outpath,alt));
-    cout << "PUSHED " << inpath << endl;
+    // FIXME only correcting every 10th image
+    if(count % 10 == 0) {
+      Tokenizer tok(line);
+      fields.assign(tok.begin(),tok.end());
+      string inpath = fields.front();
+      int alt = (int)(atof(fields.back().c_str()) * 100);
+      stringstream outpaths;
+      string outpath;
+      outpaths << OUT_DIR << "/correct" << count << ".tiff";
+      outpath = outpaths.str();
+      cwork.push(CorrectJob(inpath,outpath,alt));
+      cout << "PUSHED " << inpath << endl;
+    }
     count++;
   }
   for(int i = 0; i < N_THREADS; i++) {
