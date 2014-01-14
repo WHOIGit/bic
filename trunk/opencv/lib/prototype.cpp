@@ -142,6 +142,7 @@ void learn_prototype() {
   cout << "SUCCESS learn phase" << endl;
 
   model.save();
+  cout << "SAVED model" << endl;
 
   // add all the jobs (see learn_prototype for how this works)
   AsyncQueue<CorrectJob> cwork;

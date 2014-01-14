@@ -44,7 +44,7 @@ class illum::Lightfield {
   Mat count; // running count (fractional)
   // lazy initialization based on size of first image
   void init(Mat image) {
-    if(sum.empty()) {
+    if(empty()) {
       int h = image.size().height;
       int w = image.size().width;
       sum = Mat::zeros(h, w, CV_32F);
@@ -99,7 +99,7 @@ public:
    * added
    */
   Mat getAverage() {
-    assert(!sum.empty());
+    assert(!empty());
     // average image is just sum image divided by count image
     return sum / count;
   }
@@ -159,13 +159,14 @@ public:
 // type parameter is the numerical type used for representing altitude
 template <typename T> class Slice {
 private:
-  illum::Lightfield lf; // model for this altitude
+  illum::Lightfield* lf; // model for this altitude
   T a; // altitude
 public:
   Slice(T alt) {
     a = alt;
+    lf = new illum::Lightfield();
   }
-  illum::Lightfield getLightfield() {
+  illum::Lightfield* getLightfield() {
     return lf;
   }
   T getAlt() {
@@ -176,13 +177,12 @@ public:
 template <typename T> class illum::MultiLightfield {
 private:
   typename interp::LinearBinning<T> binning;
-  typename std::vector<Slice<T> > slices;
-  Slice<T> getSlice(T alt) {
-    typename std::vector<Slice<T> >::iterator it = slices.begin();
+  typename std::vector<Slice<T>* > slices;
+  Slice<T>* getSlice(T alt) {
+    typename std::vector<Slice<T>* >::iterator it = slices.begin();
     for(; it != slices.end(); ++it) {
-      Slice<T> slice = *it;
-      if(slice.getAlt() == alt) {
-	std::cout << "got slice for " << alt << std::endl;
+      Slice<T>* slice = *it;
+      if(slice->getAlt() == alt) {
 	return slice;
       }
     }
@@ -193,20 +193,21 @@ public:
     std::vector<T> bins = binning.getBins();
     typename std::vector<T>::iterator it = bins.begin();
     for(; it != bins.end(); ++it) {
-      slices.push_back(Slice<T>(*it));
+      slices.push_back(new Slice<T>(*it));
     }
   }
   void addImage(cv::Mat image, T alt) {
-    std::vector<std::pair<T,double> > result = binning.interpolate(alt);
-    typename std::vector<std::pair<T,double> >::iterator it = result.begin();
+    using namespace std;
+    vector<pair<T,double> > result = binning.interpolate(alt);
+    typename vector<pair<T,double> >::iterator it = result.begin();
     for(; it != result.end(); ++it) {
-      std::pair<T,double> p = *it;
+      pair<T,double> p = *it;
       T sAlt = p.first; // altitude
       double alpha = p.second; // contribution to this altitude's slice
       if(alpha > 0) {
-	Slice<T> slice = getSlice(sAlt);
-	slice.getLightfield().addImage(image, alpha);
-	break;
+	Slice<T>* slice = getSlice(sAlt);
+	slice->getLightfield()->addImage(image, alpha);
+	//assert(!slice->getLightfield()->empty());
       }
     }
   }
@@ -221,8 +222,8 @@ public:
       double alpha = p.second; // contribution to this altitude's slice
       if(alpha > 0) {
 	// nonzero contribution. find the slice
-	Slice<T> slice = getSlice(sAlt);
-	cv::Mat sAverage = slice.getLightfield().getAverage();
+	Slice<T>* slice = getSlice(sAlt);
+	cv::Mat sAverage = slice->getLightfield()->getAverage();
 	if(average.empty()) {
 	  int h = sAverage.size().height;
 	  int w = sAverage.size().width;
@@ -233,19 +234,18 @@ public:
     }
     return average;
   }
-  void save() {
-    // FIXME debug
+  void save() { // FIXME debug
     int count = 0;
-    typename std::vector<Slice<T> >::iterator it = slices.begin();
+    typename std::vector<Slice<T>* >::iterator it = slices.begin();
     for(; it != slices.end(); ++it, ++count) {
       std::stringstream outpaths;
       std::string outpath;
       outpaths << "out/slice" << count << ".tiff";
       outpath = outpaths.str();
-      Slice<T> slice = *it;
-      illum::Lightfield lf = slice.getLightfield();
-      if(!lf.empty()) {
-	slice.getLightfield().save(outpath);
+      Slice<T>* slice = *it;
+      illum::Lightfield* lf = slice->getLightfield();
+      if(!lf->empty()) {
+	lf->save(outpath);
       }
     }
   }
