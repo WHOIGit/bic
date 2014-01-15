@@ -19,8 +19,7 @@ void demoBinning() { // FIXME delete
   }
 }
 
-int main(int argc, char **argv) {
-  //learn_prototype();
+void demoSmoothing(int argc, char **argv) { // FIXME delete
   using namespace cv;
   Mat cfa = imread(argv[1],CV_LOAD_IMAGE_ANYDEPTH);
   Mat q(cfa.size(), cfa.type());
@@ -31,4 +30,8 @@ int main(int argc, char **argv) {
   cfa_smooth(cfa,cfa,31);
   imwrite("cfa_smooth.tiff",cfa);
   imwrite("rgb_smooth.tiff",demosaic(cfa,"rggb"));
+}
+
+int main(int argc, char **argv) {
+  learn_prototype();
 }

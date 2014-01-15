@@ -97,7 +97,8 @@ void correct_worker(MultiLightfield<int> *model, AsyncQueue<CorrectJob>* queue) 
     string outpath = job.outpath;
     cout << "POPPED " << inpath << " " << job.altitude << endl;
     Mat average = model->getAverage(job.altitude);
-    Mat cfa_LR = illum::correct(imread(inpath, CV_LOAD_IMAGE_ANYDEPTH), average);
+    Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
+    illum::correct(cfa_LR, cfa_LR, average);
     cout << "Demosaicing " << inpath << endl;
     Mat rgb_LR = demosaic(cfa_LR,"rgGb");
     cout << "Saving RGB to " << outpath << endl;
@@ -154,8 +155,8 @@ void learn_prototype() {
   ifstream inpaths2(PATH_FILE);
   int count = 0;
   while(getline(inpaths2,line)) {
-    // FIXME only correcting every 10th image
-    if(count % 10 == 0) {
+    // FIXME only correcting every 5th image
+    if(count % 5 == 0) {
       Tokenizer tok(line);
       fields.assign(tok.begin(),tok.end());
       string inpath = fields.front();

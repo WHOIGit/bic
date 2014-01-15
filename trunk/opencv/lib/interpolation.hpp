@@ -11,6 +11,8 @@ private:
 public:
   LinearBinning() { }
   LinearBinning(T low, T high, T width) {
+    assert(high > low);
+    assert(width < (high-low));
     for(T v = low; v <= high; v += width) {
       bins.push_back(v);
     }

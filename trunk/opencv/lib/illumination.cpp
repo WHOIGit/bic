@@ -4,17 +4,20 @@
  * Correct an image by dividing it by an illumination model image,
  * e.g., one computed by frame averaging
  *
- * @param image the image
- * @return a new, correctly-illuminated image
+ * @param src the source image
+ * @param dst the destination image (must be same size and type as src)
+ * @return a new, correctly-illuminated image (in floating point)
  */
-cv::Mat illum::correct(cv::Mat image, cv::Mat lightfield) {
-  assert(image.size().height == lightfield.size().height);
-  assert(image.size().width == lightfield.size().width);
-  cv::Mat image32f;
-  image.convertTo(image32f, CV_32F); // convert to floating point
+void illum::correct(cv::Mat src, cv::Mat dst, cv::Mat lightfield) {
+  assert(src.size()==dst.size());
+  assert(src.type()==dst.type());
+  assert(src.size()==lightfield.size());
+  cv::Mat src32f;
+  src.convertTo(src32f, CV_32F); // convert to floating point
   // find intensity range of lightfield image
   double minLightmap, maxLightmap;
   cv::minMaxLoc(lightfield, &minLightmap, &maxLightmap);
   // divide image by lightfield, then normalize to intensity range of lightfield
-  return (image32f / lightfield) * (maxLightmap - minLightmap);
+  cv::Mat correct32f = (src32f / lightfield) * (maxLightmap - minLightmap);
+  correct32f.convertTo(dst, src.type());
 }

@@ -19,9 +19,9 @@
  * average, with the proportion varying per-pixel. In that case an
  * alpha channel can be passed when adding an image.
  *
- * All computations are in 32-bit floating point but any input image
- * type is supported. All images added and corrected should be the
- * same type or results will not be correct.
+ * All computations are in 32-bit floating point but any
+ * single-channel input image type is supported. All images added and
+ * corrected should be the same type or results will not be correct.
  *
  * Checkpointing is supported via saving and loading to the filesystem
  * in a 16-bit representation, so that running averages can be
@@ -30,11 +30,10 @@
  * images that can be averaged before overflowing the checkpoint image
  * format.
  */
-// FIXME does this work with color images?
 namespace illum {
   class Lightfield;
   template <typename T> class MultiLightfield;
-  cv::Mat correct(cv::Mat, cv::Mat);
+  void correct(cv::Mat src, cv::Mat dst, cv::Mat lightfield);
 };
 
 class illum::Lightfield {
@@ -169,6 +168,9 @@ public:
   illum::Lightfield* getLightfield() {
     return lf;
   }
+  cv::Mat getAverage() {
+    return lf->getAverage();
+  }
   T getAlt() {
     return a;
   }
@@ -207,7 +209,6 @@ public:
       if(alpha > 0) {
 	Slice<T>* slice = getSlice(sAlt);
 	slice->getLightfield()->addImage(image, alpha);
-	//assert(!slice->getLightfield()->empty());
       }
     }
   }
@@ -222,15 +223,14 @@ public:
       if(alpha > 0) {
 	// nonzero contribution. find the slice
 	Slice<T>* slice = getSlice(sAlt);
-	cv::Mat sAverage = slice->getLightfield()->getAverage();
+	cv::Mat sAverage = slice->getAverage();
 	if(average.empty()) {
-	  int h = sAverage.size().height;
-	  int w = sAverage.size().width;
-	  average.create(h, w, CV_32F);
+	  average.create(sAverage.size(), CV_32F);
 	}
 	average += sAverage.mul(alpha);
       }
     }
+    // FIXME memoize or at least cache slice averages
     return average;
   }
   void save() { // FIXME debug
