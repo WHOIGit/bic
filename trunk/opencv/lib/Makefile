@@ -5,12 +5,14 @@ LDLIBS=-lopencv_core -lopencv_imgproc -lopencv_highgui -lopencv_ml -lopencv_vide
 SRCS=main.cpp demosaic.cpp prototype.cpp illumination.cpp
 OBJS=$(subst .cpp,.o,$(SRCS))
 
+includes = $(wildcard *.hpp)
+
 all: app
 
 app: $(OBJS)
 	g++ $(LDFLAGS) -o app $(OBJS) $(LDLIBS) 
 
-%.o: %.cpp %.hpp
+%.o: %.cpp ${includes}
 	g++ -c $< -o $@
 
 clean:
