@@ -142,8 +142,15 @@ void learn_prototype() {
   lworkers.join_all();
   cout << "SUCCESS learn phase" << endl;
 
-  model.save();
+  model.save(OUT_DIR);
   cout << "SAVED model" << endl;
+}
+
+void correct_prototype() {
+  // create new model
+  MultiLightfield<int> model(100, 300, 10);
+  model.load(OUT_DIR);
+  cout << "LOADED model" << endl;
 
   // add all the jobs (see learn_prototype for how this works)
   AsyncQueue<CorrectJob> cwork;
@@ -153,7 +160,10 @@ void learn_prototype() {
     cworkers.add_thread(worker);
   }
   ifstream inpaths2(PATH_FILE);
+  string line;
   int count = 0;
+  typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
+  vector<string> fields;
   while(getline(inpaths2,line)) {
     // FIXME only correcting every 5th image
     if(count % 5 == 0) {

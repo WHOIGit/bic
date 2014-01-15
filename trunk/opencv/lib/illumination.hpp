@@ -177,6 +177,8 @@ public:
 };
 
 template <typename T> class illum::MultiLightfield {
+  typedef cv::Mat Mat;
+  typedef std::string string; 
 private:
   typename interp::LinearBinning<T> binning;
   typename std::vector<Slice<T>* > slices;
@@ -198,7 +200,7 @@ public:
       slices.push_back(new Slice<T>(*it));
     }
   }
-  void addImage(cv::Mat image, T alt) {
+  void addImage(Mat image, T alt) {
     using namespace std;
     vector<pair<T,double> > result = binning.interpolate(alt);
     typename vector<pair<T,double> >::iterator it = result.begin();
@@ -212,8 +214,8 @@ public:
       }
     }
   }
-  cv::Mat getAverage(T alt) {
-    cv::Mat average;
+  Mat getAverage(T alt) {
+    Mat average;
     std::vector<std::pair<T,double> > result = binning.interpolate(alt);
     typename std::vector<std::pair<T,double> >::iterator it = result.begin();
     for(; it != result.end(); ++it) {
@@ -223,7 +225,7 @@ public:
       if(alpha > 0) {
 	// nonzero contribution. find the slice
 	Slice<T>* slice = getSlice(sAlt);
-	cv::Mat sAverage = slice->getAverage();
+	Mat sAverage = slice->getAverage();
 	if(average.empty()) {
 	  average.create(sAverage.size(), CV_32F);
 	}
@@ -233,18 +235,27 @@ public:
     // FIXME memoize or at least cache slice averages
     return average;
   }
-  void save() { // FIXME debug
-    int count = 0;
+  void save(string outdir) {
     typename std::vector<Slice<T>* >::iterator it = slices.begin();
-    for(; it != slices.end(); ++it, ++count) {
-      std::stringstream outpaths;
-      std::string outpath;
-      outpaths << "out/slice" << count << ".tiff";
-      outpath = outpaths.str();
+    for(int count = 0; it != slices.end(); ++it, ++count) {
       Slice<T>* slice = *it;
       illum::Lightfield* lf = slice->getLightfield();
       if(!lf->empty()) {
-	lf->save(outpath);
+	std::stringstream outpaths;
+	outpaths << outdir << "/slice_" << count << ".tiff";
+	lf->save(outpaths.str());
+      }
+    }
+  }
+  void load(string outdir) {
+    std::vector<T> bins = binning.getBins();
+    typename std::vector<Slice<T>* >::iterator sit = slices.begin();
+    for(int count = 0; sit != slices.end(); ++sit, ++count) {
+      std::stringstream inpaths;
+      inpaths << outdir << "/slice_" << count << ".tiff";
+      if(access(inpaths.str().c_str(),F_OK) != -1) {
+	Slice<T>* slice = *sit;
+	slice->getLightfield()->load(inpaths.str());
       }
     }
   }

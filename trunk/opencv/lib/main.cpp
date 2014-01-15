@@ -33,5 +33,9 @@ void demoSmoothing(int argc, char **argv) { // FIXME delete
 }
 
 int main(int argc, char **argv) {
-  learn_prototype();
+  if(string(argv[1])=="learn") {
+    learn_prototype();
+  } else {
+    correct_prototype();
+  }
 }
