@@ -5,13 +5,8 @@
 using namespace cv;
 using namespace std;
 
-string str_tolower(string in) { // FIXME dead code
-  string out;
-  out.append(in);
-  transform(out.begin(), out.end(), out.begin(), ::tolower);
-  return out;
-}
-
+// create a kernel for the given CFA channel
+// given the name of the Bayer pattern
 Mat cfa_kern(string cfa, char chan) {
   int A = cfa[0]==chan;
   int B = cfa[1]==chan;
@@ -22,6 +17,7 @@ Mat cfa_kern(string cfa, char chan) {
 	  C, D);
 }
 
+// utils for producing kernels for R, G, and B channels
 Mat r_kern(string cfa) {
   return cfa_kern(cfa,'r');
 }
@@ -31,6 +27,8 @@ Mat g_kern(string cfa) {
 Mat b_kern(string cfa) {
   return cfa_kern(cfa,'b');
 }
+
+// kernel generation for
 // R at G, R row as well as B at G, B col
 Mat ratg_rrow_kern(string cfa) {
   int A = cfa[0]=='g' && cfa[1]=='r';
@@ -41,6 +39,8 @@ Mat ratg_rrow_kern(string cfa) {
 	  A, B,
 	  C, D);
 }
+
+// kernel generation for
 // R at G, R col as well as B at G, B row
 Mat ratg_rcol_kern(string cfa) {
   int A = cfa[0]=='g' && cfa[2]=='r';
@@ -69,7 +69,7 @@ Mat demosaic(Mat image_in, string cfaPattern) {
   h = S.height;
   w = S.width;
 
-  // Bayer pattern
+  // Bayer pattern is case-insensitive
   boost::to_lower(cfaPattern);
 
   // construct G channel
@@ -153,26 +153,41 @@ Mat demosaic(Mat image_in, string cfaPattern) {
   iRB.copyTo(R,ratg_rcol_mask);
   iRB.copyTo(B,batg_bcol_mask);
 
-  // now convert output back to original image depth
+  // construct color image from channels
   Mat color, out;
   vector<Mat> BGR(3);
   BGR[0] = B;
   BGR[1] = G;
   BGR[2] = R;
   merge(BGR, color);
+  // now convert output back to original image depth
   color.convertTo(out, image_in.depth());
   return out;
 }
 
 /// utility
 
+// cv::remap cannot operate in-place, so this function
+// simulates it.
+void inplace_remap(Mat src, Mat dst, Mat xMap, Mat yMap) {
+  if(src.data==dst.data) { // in-place op requested
+    Mat remapped(src.size(), src.type()); // allocate new Mat
+    remap(src,remapped,xMap,yMap,INTER_NEAREST); // remap
+    remapped.copyTo(dst); // copy the data to the dst/src
+  } else { // otherwise proceed with not-in-place op
+    remap(src,dst,xMap,yMap,INTER_NEAREST);
+  }
+}
+
+// convert a CFA image into a 2x2 mosaic of half-images
+// per-Bayer-channel
 void cfa_quad(Mat src, Mat dst) {
   assert(dst.size()==src.size());
   assert(dst.type()==src.type());
   Mat xMap, yMap;
   xMap.create(src.size(), CV_32F);
   yMap.create(src.size(), CV_32F);
-  // build map
+  // build pixel-swapping map
   int c2 = src.cols/2;
   int r2 = src.rows/2;
   for(int x = 0; x < src.cols; x++) {
@@ -189,18 +204,18 @@ void cfa_quad(Mat src, Mat dst) {
       }
     }
   }
-  Mat remapped(src.size(), src.type());
-  remap(src,remapped,xMap,yMap,INTER_NEAREST);
-  remapped.copyTo(dst);
+  // perform pixel-swapping
+  inplace_remap(src,dst,xMap,yMap);
 }
 
+// convert the output of cfa_quad back into a CFA image
 void quad_cfa(Mat src, Mat dst) {
   assert(dst.size()==src.size());
   assert(dst.type()==src.type());
   Mat xMap, yMap;
   xMap.create(src.size(), CV_32F);
   yMap.create(src.size(), CV_32F);
-  // build map
+  // build pixel-swapping map
   int c2 = src.cols/2;
   int r2 = src.rows/2;
   for(int x = 0; x < src.cols; x++) {
@@ -217,39 +232,52 @@ void quad_cfa(Mat src, Mat dst) {
       }
     }
   }
-  Mat remapped(src.size(), src.type());
-  remap(src,remapped,xMap,yMap,INTER_NEAREST);
-  remapped.copyTo(dst);
+  // perform pixel-swapping
+  inplace_remap(src,dst,xMap,yMap);
 }
 
+// given a CFA image return one of the channels, which
+// will be a half-size image. channel specified as x and y
+// offsets each of which which must be 0 or 1.
 void cfa_channel(Mat src, Mat dst, int x, int y) {
   assert(x==0 || x==1);
   assert(y==0 || y==1);
   assert(dst.type()==src.type());
+  // dst must be half-sized
   int w2 = src.cols/2;
   int h2 = src.rows/2;
   assert(dst.cols==w2);
   assert(dst.rows==h2);
-  // now return just the requested quadrant
+  // create mosaic of channel quadrants
   Mat quad(src.size(), src.type());
   cfa_quad(src,quad);
+  // return the requested quadrant
   Mat roi(quad, Rect(w2*x,h2*y,w2,h2));
   roi.copyTo(dst);
 }
 
+// smooth a CFA image in CFA space; that is, convert
+// to quadrant mosaic, smooth each quadrant independently,
+// then convert back to CFA.
+// ksize must be approximately half what it would be for
+// the full-resolution image, and must be odd
 void cfa_smooth(Mat src, Mat dst, int ksize) {
+  assert(ksize % 2 == 1); // kernel size must be odd
   assert(dst.size()==src.size());
   assert(dst.type()==src.type());
+  // compute sigma from ksize using standard formula
+  double sigma = 0.3*((ksize-1)*0.5 - 1) + 0.8;
+  cfa_quad(src,dst); // split into quads
   int w2 = src.size().width / 2;
   int h2 = src.size().height / 2;
-  cfa_quad(src,dst);
-  double sigma = 0.3*((ksize-1)*0.5 - 1) + 0.8;
+  // for each quadrant
   for(int x = 0; x < 2; x++) {
     for(int y = 0; y < 2; y++) {
       Rect roi = Rect(x*w2,y*h2,w2,h2);
-      Mat q(dst, roi);
-      GaussianBlur(q,q,Size(ksize,ksize),sigma);
+      Mat q(dst, roi); // extract roi for that quadrant
+      GaussianBlur(q,q,Size(ksize,ksize),sigma); // apply blur inplace
     }
   }
+  // convert destination back to CFA inplace
   quad_cfa(dst,dst);
 }
