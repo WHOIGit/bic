@@ -165,31 +165,18 @@ Mat demosaic(Mat image_in, string cfaPattern) {
 }
 
 /// utility
-/**
- * Generate a mosaic of four half-resolution images containing pixels from
- * each Bayer offset, i.e. an image laid out like this with respect to
- * Bayer offsets x,y:
- *
- * +---+---+
- * |0,0|1,0|
- * +---+---+
- * |0,1|1,1|
- * +---+---+
- *
- * @param cfa the image
- */
-Mat cfa_quad(Mat cfa) {
-  Mat remapped;
-  Mat xMap, yMap;
-  remapped.create(cfa.size(), cfa.type());
-  xMap.create(cfa.size(), CV_32F);
-  yMap.create(cfa.size(), CV_32F);
 
+void cfa_quad(Mat src, Mat dst) {
+  assert(dst.size()==src.size());
+  assert(dst.type()==src.type());
+  Mat xMap, yMap;
+  xMap.create(src.size(), CV_32F);
+  yMap.create(src.size(), CV_32F);
   // build map
-  int c2 = cfa.cols/2;
-  int r2 = cfa.rows/2;
-  for(int x = 0; x < cfa.cols; x++) {
-    for(int y = 0; y < cfa.rows; y++) {
+  int c2 = src.cols/2;
+  int r2 = src.rows/2;
+  for(int x = 0; x < src.cols; x++) {
+    for(int y = 0; y < src.rows; y++) {
       if(x < c2) {
 	xMap.at<float>(y,x) = x * 2;
       } else {
@@ -202,38 +189,22 @@ Mat cfa_quad(Mat cfa) {
       }
     }
   }
-  remap(cfa,remapped,xMap,yMap,INTER_NEAREST);
-  return remapped;
+  Mat remapped(src.size(), src.type());
+  remap(src,remapped,xMap,yMap,INTER_NEAREST);
+  remapped.copyTo(dst);
 }
 
-/**
- * Given a mosaic of four half-resolution images containing pixels from
- * each Bayer offset, i.e. an image laid out like this with respect to
- * Bayer offsets x,y:
- *
- * +---+---+
- * |0,0|1,0|
- * +---+---+
- * |0,1|1,1|
- * +---+---+
- *
- * produce the full-resolution CFA image. This is the inverse operation
- * of cfa_quad.
- *
- * @param cfa the image mosaic
- */
-Mat quad_cfa(Mat quad) {
-  Mat remapped;
+void quad_cfa(Mat src, Mat dst) {
+  assert(dst.size()==src.size());
+  assert(dst.type()==src.type());
   Mat xMap, yMap;
-  remapped.create(quad.size(), quad.type());
-  xMap.create(quad.size(), CV_32F);
-  yMap.create(quad.size(), CV_32F);
-
+  xMap.create(src.size(), CV_32F);
+  yMap.create(src.size(), CV_32F);
   // build map
-  int c2 = quad.cols/2;
-  int r2 = quad.rows/2;
-  for(int x = 0; x < quad.cols; x++) {
-    for(int y = 0; y < quad.rows; y++) {
+  int c2 = src.cols/2;
+  int r2 = src.rows/2;
+  for(int x = 0; x < src.cols; x++) {
+    for(int y = 0; y < src.rows; y++) {
       if(x % 2 == 0) {
 	xMap.at<float>(y,x) = x / 2;
       } else {
@@ -246,53 +217,39 @@ Mat quad_cfa(Mat quad) {
       }
     }
   }
-  remap(quad,remapped,xMap,yMap,INTER_NEAREST);
-  return remapped;
+  Mat remapped(src.size(), src.type());
+  remap(src,remapped,xMap,yMap,INTER_NEAREST);
+  remapped.copyTo(dst);
 }
 
-/**
- * Return a 1/2-resolution image containing pixels at the given
- * bayer offset.
- *
- * @param cfa the image
- * @param x the x offset (0 or 1, default 0)
- * @param y the y offset (0 or 1, default 0)
- */
-Mat cfa_channel(cv::Mat cfa, int x, int y) {
+void cfa_channel(Mat src, Mat dst, int x, int y) {
   assert(x==0 || x==1);
   assert(y==0 || y==1);
+  assert(dst.type()==src.type());
+  int w2 = src.cols/2;
+  int h2 = src.rows/2;
+  assert(dst.cols==w2);
+  assert(dst.rows==h2);
   // now return just the requested quadrant
-  int w2 = cfa.cols/2;
-  int h2 = cfa.rows/2;
-  Mat roi(cfa_quad(cfa), Rect(w2*x,h2*y,w2,h2));
-  return roi;
+  Mat quad(src.size(), src.type());
+  cfa_quad(src,quad);
+  Mat roi(quad, Rect(w2*x,h2*y,w2,h2));
+  roi.copyTo(dst);
 }
 
-/**
- * Smooth a Bayer-patterned image with a Gaussian filter, applying
- * the filter to the four Bayer offsets independently.
- *
- * @param cfa the Bayer-patterned image
- *
- * @param ksize the kernel size. Use approximately half the kernel
- * size you would use for a full-resolution image. Must be odd. Sigma
- * will be computed from it using the following formula:
- *
- * 0.3*((ksize-1)*0.5 - 1) + 0.8;
- *
- * @return the smoothed CFA image
- */
-Mat cfa_smooth(Mat cfa, int ksize) {
-  int w2 = cfa.size().width / 2;
-  int h2 = cfa.size().height / 2;
-  Mat quad = cfa_quad(cfa);
+void cfa_smooth(Mat src, Mat dst, int ksize) {
+  assert(dst.size()==src.size());
+  assert(dst.type()==src.type());
+  int w2 = src.size().width / 2;
+  int h2 = src.size().height / 2;
+  cfa_quad(src,dst);
   double sigma = 0.3*((ksize-1)*0.5 - 1) + 0.8;
   for(int x = 0; x < 2; x++) {
     for(int y = 0; y < 2; y++) {
       Rect roi = Rect(x*w2,y*h2,w2,h2);
-      Mat q(quad, roi);
+      Mat q(dst, roi);
       GaussianBlur(q,q,Size(ksize,ksize),sigma);
     }
   }
-  return quad_cfa(quad);
+  quad_cfa(dst,dst);
 }

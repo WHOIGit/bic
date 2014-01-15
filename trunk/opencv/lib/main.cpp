@@ -23,7 +23,12 @@ int main(int argc, char **argv) {
   //learn_prototype();
   using namespace cv;
   Mat cfa = imread(argv[1],CV_LOAD_IMAGE_ANYDEPTH);
-  cfa = cfa_smooth(cfa,31);
+  Mat q(cfa.size(), cfa.type());
+  cfa_quad(cfa,q);
+  assert(!q.empty());
+  imwrite("cfa_quad.tiff",q);
+  quad_cfa(q,cfa);
+  cfa_smooth(cfa,cfa,31);
   imwrite("cfa_smooth.tiff",cfa);
   imwrite("rgb_smooth.tiff",demosaic(cfa,"rggb"));
 }

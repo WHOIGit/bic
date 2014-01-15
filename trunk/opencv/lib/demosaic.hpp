@@ -34,10 +34,11 @@ cv::Mat demosaic(cv::Mat cfa, std::string cfaPattern="rggb");
  * |0,1|1,1|
  * +---+---+
  *
- * @param cfa the CFA image
- * @return the channels mosaic
+ * @param src the CFA image
+ * @param dst the channels mosaic (same size and type or will be
+ * created)
  */
-cv::Mat cfa_quad(cv::Mat cfa);
+void cfa_quad(cv::Mat src, cv::Mat dst);
 
 /**
  * Given a mosaic of four half-resolution images containing pixels from
@@ -53,22 +54,24 @@ cv::Mat cfa_quad(cv::Mat cfa);
  * produce the full-resolution CFA image. This is the inverse operation
  * of cfa_quad.
  *
- * @param cfa the channels mosaic
- * @return the original CFA image
+ * @param src the channels mosaic 
+ * @param dst the CFA image (same size and type or will be
+ * created)
  */
-cv::Mat quad_cfa(cv::Mat quad);
+void quad_cfa(cv::Mat quad, cv::Mat dst);
 
 /**
  * Return a half-resolution image containing pixels at the given
  * Bayer offset.
  *
- * @param cfa the image
+ * @param src the CFA image
+ * @param dst the output image (must be half the resolution)
  * @param x the x offset (0 or 1, default 0)
  * @param y the y offset (0 or 1, default 0)
  *
  * @return the channel image
  */
-cv::Mat cfa_channel(cv::Mat cfa, int x=0, int y=0);
+void cfa_channel(cv::Mat src, cv::Mat dst, int x=0, int y=0);
 
 /**
  * Smooth a Bayer-patterned image with a Gaussian filter, applying
@@ -82,6 +85,7 @@ cv::Mat cfa_channel(cv::Mat cfa, int x=0, int y=0);
  *
  * 0.3*((ksize-1)*0.5 - 1) + 0.8;
  *
- * @return the smoothed CFA image
+ * @param src the CFA image
+ * @param dst the output image
  */
-cv::Mat cfa_smooth(cv::Mat cfa, int ksize);
+void cfa_smooth(cv::Mat src, cv::Mat dst, int ksize);
