@@ -13,7 +13,8 @@
  * illuminated, assuming that all images added and being corrected
  * have been acquired under the same lighting conditions.
  *
- * Basic usage involves adding images, followed by correcting images.
+ * Basic usage involves adding images, followed by retrieving average
+ * image which can be used to correct images via illum::correct.
  *
  * In some cases an image might contribute partially to the frame
  * average, with the proportion varying per-pixel. In that case an
@@ -43,6 +44,7 @@ class illum::Lightfield {
   Mat count; // running count (fractional)
   // lazy initialization based on size of first image
   void init(Mat image) {
+    assert(!image.empty());
     if(empty()) {
       int h = image.size().height;
       int w = image.size().width;
@@ -90,6 +92,15 @@ public:
     image.convertTo(image32f, CV_32F); // convert to floatin point
     sum += image32f * alpha; // multiply by alpha and add to sum image
     count += alpha; // add alpha to count image
+  }
+  /**
+   * Compute the average image and return it in dst.
+   *
+   * dst must be of type CV_32F.
+   */
+  void getAverage(Mat dst) {
+    assert(dst.type()==CV_32F);
+    getAverage().copyTo(dst);
   }
   /**
    * Compute the average image and return it.
@@ -168,21 +179,25 @@ public:
   illum::Lightfield* getLightfield() {
     return lf;
   }
-  cv::Mat getAverage() {
-    return lf->getAverage();
-  }
   T getAlt() {
     return a;
   }
 };
 
+/**
+ * A multi-altitude lightfield consisting of a set of lightfields each
+ * of which is associated with a specific altitude. Average images are
+ * generated from arbitrary altitudes in the multi-lightfield's
+ * altitude range via interpolation.
+ */
 template <typename T> class illum::MultiLightfield {
   typedef cv::Mat Mat;
   typedef std::string string; 
 private:
-  typename interp::LinearBinning<T> binning;
-  typename std::vector<Slice<T>* > slices;
-  Slice<T>* getSlice(T alt) {
+  // FIXME enable extensible interpolation methods
+  typename interp::LinearBinning<T> binning; // interpolation method
+  typename std::vector<Slice<T>* > slices; // altitude slices
+  Slice<T>* getSlice(T alt) { // accessor for slice by altitude
     typename std::vector<Slice<T>* >::iterator it = slices.begin();
     for(; it != slices.end(); ++it) {
       Slice<T>* slice = *it;
@@ -192,6 +207,12 @@ private:
     }
   }
 public:
+  /**
+   * Create a multi-altitude lightfield.
+   * @param low the lowest altitude
+   * @param high the highest altitude
+   * @param width the width of each altitude bin
+   */
   MultiLightfield(T low, T high, T width) {
     binning = interp::LinearBinning<T>(low, high, width);
     std::vector<T> bins = binning.getBins();
@@ -200,6 +221,11 @@ public:
       slices.push_back(new Slice<T>(*it));
     }
   }
+  /**
+   * Add an image to the lightfield
+   * @param image the image to add
+   * @param alt the altitude the image was taken at
+   */
   void addImage(Mat image, T alt) {
     using namespace std;
     vector<pair<T,double> > result = binning.interpolate(alt);
@@ -214,6 +240,12 @@ public:
       }
     }
   }
+  /**
+   * Get the average image at the given altitude.
+   * If the altitude is not located exactly at one of the altitude bins,
+   * the average image is interpolated between two adjacent bins.
+   * @param alt the altitude
+   */
   Mat getAverage(T alt) {
     Mat average;
     std::vector<std::pair<T,double> > result = binning.interpolate(alt);
@@ -225,7 +257,7 @@ public:
       if(alpha > 0) {
 	// nonzero contribution. find the slice
 	Slice<T>* slice = getSlice(sAlt);
-	Mat sAverage = slice->getAverage();
+	Mat sAverage = slice->getLightfield()->getAverage();
 	if(average.empty()) {
 	  average.create(sAverage.size(), CV_32F);
 	}
@@ -235,6 +267,26 @@ public:
     // FIXME memoize or at least cache slice averages
     return average;
   }
+  /**
+   * Get the average image at the given altitude and store in dst.
+   * If the altitude is not located exactly at one of the altitude bins,
+   * the average image is interpolated between two adjacent bins.
+   *
+   * @param dst the destination image. must be of type CV_32F
+   * @param alt the altitude
+   */
+  void getAverage(Mat dst, T alt) {
+    assert(dst.type()==CV_32F);
+    getAverage(alt).copyTo(dst);
+  }
+  /**
+   * Save the multi-lightfield to a directory. The lightfield is
+   * saved as a set of TIFF images. If the directory contains files
+   * with similar names, this will overwrite those files, so don't
+   * use a directory that already has other files in it.
+   *
+   * @param outdir the output directory
+   */
   void save(string outdir) {
     typename std::vector<Slice<T>* >::iterator it = slices.begin();
     for(int count = 0; it != slices.end(); ++it, ++count) {
@@ -247,6 +299,14 @@ public:
       }
     }
   }
+  /**
+   * Load the multi-lightfield from a directory. The lightfield is
+   * saved as a set of TIFF images. If the directory contains files
+   * with similar names, this will attempt to read them, so don't use
+   * a directory that wasn't populated using the save method.
+   *
+   * @param outdir the output directory where the lightfield is stored
+   */
   void load(string outdir) {
     std::vector<T> bins = binning.getBins();
     typename std::vector<Slice<T>* >::iterator sit = slices.begin();

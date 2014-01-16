@@ -18,6 +18,12 @@ void illum::correct(cv::Mat src, cv::Mat dst, cv::Mat lightfield) {
   double minLightmap, maxLightmap;
   cv::minMaxLoc(lightfield, &minLightmap, &maxLightmap);
   // divide image by lightfield, then normalize to intensity range of lightfield
-  cv::Mat correct32f = (src32f / lightfield) * (maxLightmap - minLightmap);
+  cv::Mat lightfield32f;
+  if(lightfield.type() != CV_32F) {
+    lightfield.convertTo(lightfield32f, CV_32F);
+  } else {
+    lightfield32f = lightfield;
+  }
+  cv::Mat correct32f = (src32f / lightfield32f) * (maxLightmap - minLightmap);
   correct32f.convertTo(dst, src.type());
 }

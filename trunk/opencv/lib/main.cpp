@@ -4,6 +4,7 @@
 #include <opencv2/opencv.hpp>
 #include "prototype.hpp"
 #include "interpolation.hpp"
+#include "illumination.hpp"
 #include "demosaic.hpp"
 
 using namespace std;
@@ -32,6 +33,29 @@ void demoSmoothing(int argc, char **argv) { // FIXME delete
   imwrite("rgb_smooth.tiff",demosaic(cfa,"rggb"));
 }
 
+void smoothAnalysis() {
+  using namespace cv;
+  for(int i = 0; i <= 8; i++) {
+    stringstream inpaths;
+    inpaths << "out/slice_" << i << ".tiff";
+    //1360x1024
+    Mat cfa(imread(inpaths.str(), CV_LOAD_IMAGE_ANYDEPTH), Rect(0,0,1360,1024));
+    //Mat roi(cfa, Rect(0,0,100,100));
+    for(int j = 0; j < 5; j++) {
+      stringstream outpaths;
+      Mat new_cfa = cfa.clone();
+      cfa_smooth(cfa, new_cfa, 17);
+      outpaths << "sluice_" << i << j << ".tiff";
+      Mat diff = Mat(cfa.size(), cfa.type());
+      illum::correct(cfa, diff, new_cfa);
+      string outpath = outpaths.str();
+      cout << outpath << endl;
+      imwrite(outpath,diff);
+      new_cfa.copyTo(cfa);
+    }
+    cout << endl;
+  }
+}
 int main(int argc, char **argv) {
   if(string(argv[1])=="learn") {
     learn_prototype();

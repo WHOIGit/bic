@@ -97,6 +97,14 @@ void correct_worker(MultiLightfield<int> *model, AsyncQueue<CorrectJob>* queue) 
     string outpath = job.outpath;
     cout << "POPPED " << inpath << " " << job.altitude << endl;
     Mat average = model->getAverage(job.altitude);
+    // now smooth the average
+    int h = average.size().height;
+    int w = average.size().width;
+    Mat left = Mat(average,Rect(0,0,w/2,h));
+    Mat right = Mat(average,Rect(w/2,0,w/2,h));
+    cfa_smooth(left,left,31);
+    cfa_smooth(right,right,31);
+    cout << "SMOOTHED lightmap" << endl;
     Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
     illum::correct(cfa_LR, cfa_LR, average);
     cout << "Demosaicing " << inpath << endl;
