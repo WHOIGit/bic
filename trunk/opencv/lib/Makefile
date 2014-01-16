@@ -13,7 +13,7 @@ app: $(OBJS)
 	g++ $(LDFLAGS) -o app $(OBJS) $(LDLIBS) 
 
 %.o: %.cpp ${includes}
-	g++ -c $< -o $@
+	g++ -c -g $< -o $@
 
 clean:
 	$(RM) $(OBJS)

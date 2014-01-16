@@ -9,57 +9,68 @@
 
 using namespace std;
 
-void demoBinning() { // FIXME delete
-  interp::LinearBinning<int> bins = interp::LinearBinning<int>(0,100,7);
-  typedef vector<pair<int, double> > interp_t;
-  interp_t result = bins.interpolate(31);
-  interp_t::iterator it = result.begin();
-  for(; it != result.end(); ++it) {
-    pair<int,double> p = *it;
-    cout << p.first << ": " << p.second << endl;
-  }
-}
-
-void demoSmoothing(int argc, char **argv) { // FIXME delete
+void doit() {
   using namespace cv;
-  Mat cfa = imread(argv[1],CV_LOAD_IMAGE_ANYDEPTH);
-  Mat q(cfa.size(), cfa.type());
-  cfa_quad(cfa,q);
-  assert(!q.empty());
-  imwrite("cfa_quad.tiff",q);
-  quad_cfa(q,cfa);
-  cfa_smooth(cfa,cfa,31);
-  imwrite("cfa_smooth.tiff",cfa);
-  imwrite("rgb_smooth.tiff",demosaic(cfa,"rggb"));
-}
-
-void smoothAnalysis() {
-  using namespace cv;
-  for(int i = 0; i <= 8; i++) {
-    stringstream inpaths;
-    inpaths << "out/slice_" << i << ".tiff";
-    //1360x1024
-    Mat cfa(imread(inpaths.str(), CV_LOAD_IMAGE_ANYDEPTH), Rect(0,0,1360,1024));
-    //Mat roi(cfa, Rect(0,0,100,100));
-    for(int j = 0; j < 5; j++) {
-      stringstream outpaths;
-      Mat new_cfa = cfa.clone();
-      cfa_smooth(cfa, new_cfa, 17);
-      outpaths << "sluice_" << i << j << ".tiff";
-      Mat diff = Mat(cfa.size(), cfa.type());
-      illum::correct(cfa, diff, new_cfa);
-      string outpath = outpaths.str();
-      cout << outpath << endl;
-      imwrite(outpath,diff);
-      new_cfa.copyTo(cfa);
+  string fname="stereocam.png";
+  Mat y_LR_in = imread(fname);
+  Mat y_LR;
+  y_LR_in.convertTo(y_LR, CV_32F);
+  // metrics
+  int h = y_LR.size().height;
+  int w = y_LR.size().width;
+  int h2 = h/2; // half the height (center of image)
+  int w2 = w/2; // half the width (split between image pair)
+  int w4 = w/4; // 1/4 the width (center of left image)
+  int w34 = w2 + w4; // 3/4 the width (center of right image)
+  int ts = 64; // template size
+  int ts2 = ts / 2;
+  // perform template matching
+  Mat out = Mat::zeros(h,w2,CV_32F);
+  int oxen[3] = { 0, ts, 0-ts };
+  for(int oxi = 0; oxi < 3; oxi++) {
+    int ox = oxen[oxi];
+    for(int y = 0; y < h-(ts*2); y += ts+1) {
+      // select the center pixels of the left image
+      Mat templ = Mat(y_LR, Rect((w4+ox)-ts2,y,ts,ts));
+      // now match that template against the corresponding horizontal
+      // strip of right image and accumulate into and output "strips"
+      // image
+      // image is w2 x ts*2. template is ts x ts
+      // outstrip is w2-ts+1 x ts+1
+      Mat instrip = Mat(y_LR, Rect(w2,y,w2,ts*2));
+      Mat outstrip = Mat::zeros(ts+1, w2-ts+1, CV_32F);
+      Mat roi = Mat(out, Rect(0,y,w2-ts+1,ts+1));
+      matchTemplate(instrip, templ, outstrip, CV_TM_CCORR);
+      roi += outstrip;
     }
-    cout << endl;
   }
+  double minVal, maxVal;
+  Point minLoc, maxLoc;
+  minMaxLoc(out, &minVal, &maxVal, &minLoc, &maxLoc);
+  cout << "min/max of out is " << minVal << "," << maxVal << endl;
+  out /= maxVal;
+  out *= 255;
+  Mat out8u;
+  out.convertTo(out8u, CV_8U);
+  out /= 255;
+  imwrite("strips.tiff",out8u);
+  // sum all rows of out image
+  Mat summed;
+  reduce(out, summed, 0, CV_REDUCE_SUM, CV_32F);
+  // now find the x location of maximum of this sum
+  minMaxLoc(summed, &minVal, &maxVal, &minLoc, &maxLoc);
+  int max_x = maxLoc.x - ts2;
+  int dx = w4 - max_x;
+  cout << "found match at " << max_x << ", offset = " << dx << endl;
 }
+
 int main(int argc, char **argv) {
+  doit();
+  /*
   if(string(argv[1])=="learn") {
     learn_prototype();
   } else {
     correct_prototype();
   }
+  */
 }
