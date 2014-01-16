@@ -277,7 +277,7 @@ void cfa_smooth(Mat src, Mat dst, int ksize) {
       Mat qRoi(dst, roi); // extract roi for that quadrant
       Mat q(h2,w2,src.type()); // copy to new image to isolate GaussianBlur operation
       qRoi.copyTo(q);
-      GaussianBlur(q,q,Size(ksize,ksize),sigma,0,BORDER_REPLICATE); // apply blur inplace
+      GaussianBlur(q,q,Size(ksize,ksize),sigma,0,BORDER_REFLECT); // apply blur inplace
       // now copy back to ROI for later re-assembly
       q.copyTo(qRoi);
     }
