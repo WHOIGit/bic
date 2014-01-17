@@ -75,6 +75,7 @@ int doit(cv::Mat y_LR_in) {
   rectangle(y_LR_in,Point(x,y),Point(x+ts,y+ts),0);
   rectangle(y_LR_in,Point(mx,my),Point(mx+ts,my+ts),0);
   imwrite("pic.tiff",y_LR_in);
+  return x-(mx-w2);
 }
 
 cv::Mat get_green(cv::Mat cfa_LR) {
@@ -104,7 +105,7 @@ int main(int argc, char **argv) {
     Mat y_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
     Mat green = get_green(y_LR);
     imwrite("green.tiff",green);
-    int x = doit(green);
+    int x = doit(green) * 2;
     cout << inpath << "," << offset << "," << x << endl;
     break;
   }
