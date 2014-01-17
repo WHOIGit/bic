@@ -25,8 +25,6 @@ int doit(cv::Mat y_LR_in) {
   int ts = 64; // template size
   int ts2 = ts / 2;
   // now select a random template location in the left image
-  uint64 seed = time(NULL);
-  RNG rng(seed);
   /*
   Mat all(ts, w2-ts+1, CV_32F);
   Mat out(ts, w2-ts+1, CV_32F);
@@ -57,31 +55,37 @@ int doit(cv::Mat y_LR_in) {
   imwrite("match.tiff",out8u);
   return max_x;
   */
-  int x = rng.uniform(ts*2,w2-ts*4);
-  int y = rng.uniform(0,h-ts*2+1);
-  Mat templ(y_LR,Rect(x,y,ts,ts));
-  Mat right(y_LR,Rect(w2,0,w2,h-ts));
-  Mat out;
-  matchTemplate(right, templ, out, CV_TM_CCOEFF_NORMED);
-  normalize(out,out,0,1,NORM_MINMAX);
-  imwrite("match.tiff",out*255);
-  Point minLoc, maxLoc;
-  double minVal, maxVal;
-  minMaxLoc(out,&minVal,&maxVal,&minLoc,&maxLoc);
-  int max_x = maxLoc.x;
-  int max_y = maxLoc.y;
-  int mx = w2+max_x;
-  int my = max_y;
-  rectangle(y_LR_in,Point(x,y),Point(x+ts,y+ts),0);
-  rectangle(y_LR_in,Point(mx,my),Point(mx+ts,my+ts),0);
-  imwrite("pic.tiff",y_LR_in);
-  return x-(mx-w2);
+  uint64 seed = time(NULL);
+  cv::RNG rng(seed);
+  while(true) {
+    int x = rng.uniform(ts*2,w2-ts*4);
+    int y = rng.uniform(0,h-ts*2+1);
+    Mat templ(y_LR,Rect(x,y,ts,ts));
+    Mat right(y_LR,Rect(w2,0,w2,h-ts));
+    Mat out;
+    matchTemplate(right, templ, out, CV_TM_CCOEFF_NORMED);
+    normalize(out,out,0,1,NORM_MINMAX);
+    Point minLoc, maxLoc;
+    double minVal, maxVal;
+    minMaxLoc(out,&minVal,&maxVal,&minLoc,&maxLoc);
+    int max_x = maxLoc.x;
+    int max_y = maxLoc.y;
+    int mx = w2+max_x;
+    int my = max_y;
+    int xoff = x-(mx-w2);
+    int ydiff = abs(max_y-y);
+    if(xoff < 0 || ydiff > ts2) {
+      continue;
+    }
+    rectangle(y_LR_in,Point(x,y),Point(x+ts,y+ts),0);
+    rectangle(y_LR_in,Point(mx,my),Point(mx+ts,my+ts),0);
+    return x-(mx-w2);
+  }
 }
 
 cv::Mat get_green(cv::Mat cfa_LR) {
   cv::Mat green;
   cfa_channel(cfa_LR, green, 1, 0);
-  imwrite("green.tiff",green);
   return green;
 }
 
@@ -107,7 +111,6 @@ int main(int argc, char **argv) {
     imwrite("green.tiff",green);
     int x = doit(green) * 2;
     cout << inpath << "," << offset << "," << x << endl;
-    break;
   }
   /*
   if(string(argv[1])=="learn") {
