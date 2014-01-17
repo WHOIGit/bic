@@ -169,7 +169,10 @@ Mat demosaic(Mat image_in, string cfaPattern) {
 
 // cv::remap cannot operate in-place, so this function
 // simulates it.
-void inplace_remap(Mat src, Mat dst, Mat xMap, Mat yMap) {
+void inplace_remap(InputArray _src, OutputArray _dst, Mat xMap, Mat yMap) {
+  Mat src = _src.getMat();
+  _dst.create(src.size(), src.type());
+  Mat dst = _dst.getMat();
   if(src.data==dst.data) { // in-place op requested
     Mat remapped(src.size(), src.type()); // allocate new Mat
     remap(src,remapped,xMap,yMap,INTER_NEAREST); // remap
@@ -181,7 +184,10 @@ void inplace_remap(Mat src, Mat dst, Mat xMap, Mat yMap) {
 
 // convert a CFA image into a 2x2 mosaic of half-images
 // per-Bayer-channel
-void cfa_quad(Mat src, Mat dst) {
+void cfa_quad(InputArray _src, OutputArray _dst) {
+  Mat src = _src.getMat();
+  _dst.create(src.size(), src.type());
+  Mat dst = _dst.getMat();
   assert(dst.size()==src.size());
   assert(dst.type()==src.type());
   Mat xMap, yMap;
@@ -209,7 +215,10 @@ void cfa_quad(Mat src, Mat dst) {
 }
 
 // convert the output of cfa_quad back into a CFA image
-void quad_cfa(Mat src, Mat dst) {
+void quad_cfa(InputArray _src, OutputArray _dst) {
+  Mat src = _src.getMat();
+  _dst.create(src.size(), src.type());
+  Mat dst = _dst.getMat();
   assert(dst.size()==src.size());
   assert(dst.type()==src.type());
   Mat xMap, yMap;
@@ -239,7 +248,10 @@ void quad_cfa(Mat src, Mat dst) {
 // given a CFA image return one of the channels, which
 // will be a half-size image. channel specified as x and y
 // offsets each of which which must be 0 or 1.
-void cfa_channel(Mat src, Mat dst, int x, int y) {
+void cfa_channel(InputArray _src, OutputArray _dst, int x, int y) {
+  Mat src = _src.getMat();
+  _dst.create(src.rows/2, src.cols/2, src.type());
+  Mat dst = _dst.getMat();
   assert(x==0 || x==1);
   assert(y==0 || y==1);
   assert(dst.type()==src.type());
@@ -261,8 +273,14 @@ void cfa_channel(Mat src, Mat dst, int x, int y) {
 // then convert back to CFA.
 // ksize must be approximately half what it would be for
 // the full-resolution image, and must be odd
-void cfa_smooth(Mat src, Mat dst, int ksize) {
+void cfa_smooth(InputArray _src, OutputArray _dst, int ksize) {
+  Mat src = _src.getMat();
+  _dst.create(src.size(), src.type());
+  Mat dst = _dst.getMat();
   assert(ksize % 2 == 1); // kernel size must be odd
+  if(dst.empty()) {
+    dst.create(src.size(), src.type());
+  }
   assert(dst.size()==src.size());
   assert(dst.type()==src.type());
   // compute sigma from ksize using standard formula

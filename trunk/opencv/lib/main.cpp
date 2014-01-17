@@ -9,9 +9,8 @@
 
 using namespace std;
 
-void doit(string fname) {
+void doit(cv::Mat y_LR_in) {
   using namespace cv;
-  Mat y_LR_in = imread(fname);
   Mat y_LR;
   y_LR_in.convertTo(y_LR, CV_32F);
   // metrics
@@ -23,55 +22,40 @@ void doit(string fname) {
   int w34 = w2 + w4; // 3/4 the width (center of right image)
   int ts = 64; // template size
   int ts2 = ts / 2;
-  // perform template matching
-  Mat out = Mat::zeros(h,w2+ts+1,CV_32F);
-  int oxen[3] = { 0, ts, 0-ts };
-  for(int y = 0; y < h-(ts*2); y += ts+1) {
-    for(int oxi = 0; oxi < 3; oxi++) {
-      int ox = oxen[oxi];
-      // select the center pixels of the left image
-      Mat templ = Mat(y_LR, Rect((w4+ox)-ts2,y,ts,ts));
-      // now match that template against the corresponding horizontal
-      // strip of right image and accumulate into and output "strips"
-      // image
-      // image is w2 x ts*2. template is ts x ts
-      // outstrip is w2+1 x ts+1
-      Mat instrip = Mat(y_LR, Rect(w2,y,w2,ts*2));
-      Mat outstrip = Mat::zeros(ts+1, w2-ts+1, CV_32F);
-      matchTemplate(instrip, templ, outstrip, CV_TM_SQDIFF_NORMED);
-      Mat roi = Mat(out, Rect(ts+ox,y,w2-ts+1,ts+1));
-      roi += outstrip;
-    }
-    // now normalize this strip
-    //Mat roi = Mat(out, Rect(ts,y,w2-ts,ts+1));
-    //normalize(roi,roi,0,1,NORM_MINMAX);
-  }
-  Mat clipped(out, Rect(ts*2,0,w2-(ts*3),h));
-  normalize(clipped,clipped,1,0,NORM_MINMAX);
-  clipped *= 255;
+  // now select a random template location in the left image
+  RNG rng;
+  int x = rng.uniform(0,w2-ts);
+  int y = rng.uniform(0,h-ts);
+  // match the template against the right image
+  Mat left(y_LR,Rect(0,y,w2,ts*2-1));
+  Mat templ(y_LR,Rect(x,y,ts,ts));
+  Mat out;
+  matchTemplate(left, templ, out, CV_TM_CCOEFF);
+  normalize(out,out,0,255,NORM_MINMAX);
   Mat out8u;
-  clipped.convertTo(out8u, CV_8U);
-  out /= 255;
-  imwrite("strips.tiff",out8u);
-  // sum all rows of out image
-  Mat summed;
-  reduce(out, summed, 0, CV_REDUCE_SUM, CV_32F);
-  // now find the x location of maximum of this sum
-  Point minLoc, maxLoc;
-  double minVal, maxVal;
-  minMaxLoc(summed, &minVal, &maxVal, &minLoc, &maxLoc);
-  int max_x = (maxLoc.x - ts2)/2;
-  int dx = w4 - max_x;
-  cout << "found match at " << max_x << ", offset = " << dx << endl;
+  out.convertTo(out8u,CV_8U);
+  imwrite("match.tiff",out);
+}
+
+cv::Mat get_green(cv::Mat cfa_LR) {
+  cv::Mat green;
+  cfa_channel(cfa_LR, green, 1, 0);
+  imwrite("green.tiff",green);
+  return green;
 }
 
 int main(int argc, char **argv) {
-  doit(argv[1]);
   /*
+  using namespace cv;
+  Mat y_LR = imread(argv[1], CV_LOAD_IMAGE_ANYDEPTH);
+  cout << y_LR.size().width << "," << y_LR.size().height << endl;
+  Mat green = get_green(y_LR);
+  cout << green.size().width << "," << green.size().height << endl;
+  doit(green);
+  */
   if(string(argv[1])=="learn") {
     learn_prototype();
   } else {
     correct_prototype();
   }
-  */
 }

@@ -8,22 +8,26 @@
  * @param dst the destination image (must be same size and type as src)
  * @return a new, correctly-illuminated image (in floating point)
  */
-void illum::correct(cv::Mat src, cv::Mat dst, cv::Mat lightfield) {
+void illum::correct(cv::InputArray _src, cv::OutputArray _dst, cv::Mat lightfield) {
+  using namespace cv;
+  Mat src = _src.getMat();
+  _dst.create(src.size(), src.type());
+  Mat dst = _dst.getMat();
   assert(src.size()==dst.size());
   assert(src.type()==dst.type());
   assert(src.size()==lightfield.size());
-  cv::Mat src32f;
+  Mat src32f;
   src.convertTo(src32f, CV_32F); // convert to floating point
   // find intensity range of lightfield image
   double minLightmap, maxLightmap;
-  cv::minMaxLoc(lightfield, &minLightmap, &maxLightmap);
+  minMaxLoc(lightfield, &minLightmap, &maxLightmap);
   // divide image by lightfield, then normalize to intensity range of lightfield
-  cv::Mat lightfield32f;
+  Mat lightfield32f;
   if(lightfield.type() != CV_32F) {
     lightfield.convertTo(lightfield32f, CV_32F);
   } else {
     lightfield32f = lightfield;
   }
-  cv::Mat correct32f = (src32f / lightfield32f) * (maxLightmap - minLightmap);
+  Mat correct32f = (src32f / lightfield32f) * (maxLightmap - minLightmap);
   correct32f.convertTo(dst, src.type());
 }

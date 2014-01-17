@@ -34,7 +34,7 @@
 namespace illum {
   class Lightfield;
   template <typename T> class MultiLightfield;
-  void correct(cv::Mat src, cv::Mat dst, cv::Mat lightfield);
+  void correct(cv::InputArray src, cv::OutputArray dst, cv::Mat lightfield);
 };
 
 class illum::Lightfield {
@@ -98,7 +98,10 @@ public:
    *
    * dst must be of type CV_32F.
    */
-  void getAverage(Mat dst) {
+  void getAverage(cv::OutputArray _dst) {
+    Mat avg = getAverage();
+    _dst.create(avg.size(), avg.type());
+    Mat dst = _dst.getMat();
     assert(dst.type()==CV_32F);
     getAverage().copyTo(dst);
   }
