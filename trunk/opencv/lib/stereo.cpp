@@ -5,12 +5,18 @@
 #include <opencv2/opencv.hpp>
 #include <boost/tokenizer.hpp>
 #include <boost/regex.hpp>
+#include <boost/accumulators/accumulators.hpp>
+#include <boost/accumulators/statistics/stats.hpp>
+#include <boost/accumulators/statistics/median.hpp>
 
 #include "demosaic.hpp"
 #include "threadutils.hpp"
 
-int doit(cv::Mat y_LR_in) {
+int align(cv::Mat y_LR_in) {
+  using namespace std;
+  static uint64 seed = time(NULL);
   using namespace cv;
+  static RNG rng(seed);
   Mat y_LR;
   y_LR_in.convertTo(y_LR, CV_32F);
   // metrics
@@ -53,8 +59,9 @@ int doit(cv::Mat y_LR_in) {
   imwrite("match.tiff",out8u);
   return max_x;
   */
-  uint64 seed = time(NULL);
-  cv::RNG rng(seed);
+  int SAMPLE_SIZE=5, n=0;
+  using namespace boost::accumulators;
+  accumulator_set<int, stats<tag::median > > samples;
   while(true) {
     int x = rng.uniform(ts*2,w2-ts*4);
     int y = rng.uniform(0,h-ts*2+1);
@@ -77,7 +84,10 @@ int doit(cv::Mat y_LR_in) {
     }
     rectangle(y_LR_in,Point(x,y),Point(x+ts,y+ts),0);
     rectangle(y_LR_in,Point(mx,my),Point(mx+ts,my+ts),0);
-    return x-(mx-w2);
+    samples(x-(mx-w2));
+    if(++n==SAMPLE_SIZE) {
+      return median(samples);
+    }
   }
 }
 
@@ -117,22 +127,45 @@ void convert_worker(AsyncQueue<std::string>* queue) {
   }
 }
 
+void align_worker(AsyncQueue<std::string>* queue) {
+  using namespace cv;
+  using namespace std;
+  while(true) {
+    string line = queue->pop();
+    if(line=="stop") {
+      return;
+    }
+    typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
+    vector<string> fields;
+    Tokenizer tok(line);
+    fields.assign(tok.begin(),tok.end());
+    string fname = fields.front();
+    int offset = (int)(atoi(fields.back().c_str()));
+    string inpath = "xoff_testset/";
+    inpath += fname;
+    Mat y_LR = imread(inpath);
+    int x = align(y_LR);
+    cout << fname << "," << offset << "," << x << endl;
+  }
+}
+
 void xoff_test(int argc, char **argv) {
   using namespace std;
   ifstream inpaths(argv[1]);
   string line;
   AsyncQueue<string> queue;
+  cout << "name,python,cpp" << endl;
   while(getline(inpaths,line)) { // read pathames from a file
     queue.push(line);
   }
-  int N_THREADS=8;
+  int N_THREADS=6;
   boost::thread_group workers; // workers
   // now push a stop job per thread
   for(int i = 0; i < N_THREADS; i++) {
     queue.push("stop"); // tell thread to stop
   }
   for(int i = 0; i < N_THREADS; i++) {
-    boost::thread* worker = new boost::thread(convert_worker, &queue);
+    boost::thread* worker = new boost::thread(align_worker, &queue);
     workers.add_thread(worker); // add them to the thread group
   }
   workers.join_all();
