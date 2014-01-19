@@ -5,6 +5,7 @@
 #include <opencv2/opencv.hpp>
 #include <boost/tokenizer.hpp>
 #include <boost/regex.hpp>
+#include <boost/asio.hpp>
 #include <boost/accumulators/accumulators.hpp>
 #include <boost/accumulators/statistics/stats.hpp>
 #include <boost/accumulators/statistics/median.hpp>
@@ -127,46 +128,49 @@ void convert_worker(AsyncQueue<std::string>* queue) {
   }
 }
 
-void align_worker(AsyncQueue<std::string>* queue) {
+void align_task(std::string line) {
   using namespace cv;
+  using namespace std;
+  typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
+  vector<string> fields;
+  Tokenizer tok(line);
+  fields.assign(tok.begin(),tok.end());
+  string fname = fields.front();
+  int offset = (int)(atoi(fields.back().c_str()));
+  string inpath = "xoff_testset/";
+  inpath += fname;
+  Mat y_LR = imread(inpath);
+  int x = align(y_LR);
+  cout << fname << "," << offset << "," << x << endl;
+}
+
+void align_worker(AsyncQueue<std::string>* queue) {
   using namespace std;
   while(true) {
     string line = queue->pop();
     if(line=="stop") {
       return;
     }
-    typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
-    vector<string> fields;
-    Tokenizer tok(line);
-    fields.assign(tok.begin(),tok.end());
-    string fname = fields.front();
-    int offset = (int)(atoi(fields.back().c_str()));
-    string inpath = "xoff_testset/";
-    inpath += fname;
-    Mat y_LR = imread(inpath);
-    int x = align(y_LR);
-    cout << fname << "," << offset << "," << x << endl;
+    align_task(line);
   }
 }
 
 void xoff_test(int argc, char **argv) {
   using namespace std;
+  cout << "name,python,cpp" << endl;
+  boost::asio::io_service io_service;
   ifstream inpaths(argv[1]);
   string line;
-  AsyncQueue<string> queue;
-  cout << "name,python,cpp" << endl;
   while(getline(inpaths,line)) { // read pathames from a file
-    queue.push(line);
+    io_service.post(boost::bind(align_task, line));
   }
-  int N_THREADS=6;
   boost::thread_group workers; // workers
-  // now push a stop job per thread
-  for(int i = 0; i < N_THREADS; i++) {
-    queue.push("stop"); // tell thread to stop
+  int N_THREADS=3;
+  for(int i = 0; i < N_THREADS; ++i) {
+    workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
   }
-  for(int i = 0; i < N_THREADS; i++) {
-    boost::thread* worker = new boost::thread(align_worker, &queue);
-    workers.add_thread(worker); // add them to the thread group
+  while(getline(inpaths,line)) { // read pathames from a file
+    io_service.post(boost::bind(align_task, line));
   }
-  workers.join_all();
+  io_service.run();
 }
