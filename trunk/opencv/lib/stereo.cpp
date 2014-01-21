@@ -6,12 +6,12 @@
 #include <boost/tokenizer.hpp>
 #include <boost/regex.hpp>
 #include <boost/asio.hpp>
+#include <boost/thread.hpp>
 #include <boost/accumulators/accumulators.hpp>
 #include <boost/accumulators/statistics/stats.hpp>
 #include <boost/accumulators/statistics/median.hpp>
 
 #include "demosaic.hpp"
-#include "threadutils.hpp"
 
 int align(cv::Mat y_LR_in) {
   using namespace std;
@@ -29,41 +29,11 @@ int align(cv::Mat y_LR_in) {
   int w34 = w2 + w4; // 3/4 the width (center of right image)
   int ts = 64; // template size
   int ts2 = ts / 2;
-  // now select a random template location in the left image
-  /*
-  Mat all(ts, w2-ts+1, CV_32F);
-  Mat out(ts, w2-ts+1, CV_32F);
-  for(int i = 0; i < 5; i++) {
-    int x = rng.uniform(ts*2,w2-ts*4);
-    int y = rng.uniform(0,h-ts*2+1);
-    // match the template against the right image
-    Mat right(y_LR,Rect(w2,y,w2,ts*2-1));
-    Mat templ(y_LR,Rect(x,y,ts,ts));
-    matchTemplate(right, templ, out, CV_TM_CCOEFF);
-    assert(all.size()==out.size());
-    assert(all.type()==out.type());
-    // now shift out by x
-    Mat outR(out,Rect(x,0,w2-ts+1-x,ts));
-    Mat outL(out,Rect(0,0,x,ts));
-    Mat allL(all,Rect(0,0,w2-ts+1-x,ts));
-    Mat allR(all,Rect(w2-ts+1-x,0,x,ts));
-    allL += outR;
-    allR += outL;
-  }
-  normalize(all,all,0,255,NORM_MINMAX);
-  Point minLoc, maxLoc;
-  double minVal, maxVal;
-  minMaxLoc(all,&minVal,&maxVal,&minLoc,&maxLoc);
-  int max_x = maxLoc.x - ts;
-  Mat out8u;
-  all.convertTo(out8u,CV_8U);
-  imwrite("match.tiff",out8u);
-  return max_x;
-  */
+  // take at least SAMPLE_SIZE samples
   int SAMPLE_SIZE=5, n=0;
   using namespace boost::accumulators;
   accumulator_set<int, stats<tag::median > > samples;
-  while(true) {
+  while(n < SAMPLE_SIZE) {
     int x = rng.uniform(ts*2,w2-ts*4);
     int y = rng.uniform(0,h-ts*2+1);
     Mat templ(y_LR,Rect(x,y,ts,ts));
@@ -86,10 +56,9 @@ int align(cv::Mat y_LR_in) {
     rectangle(y_LR_in,Point(x,y),Point(x+ts,y+ts),0);
     rectangle(y_LR_in,Point(mx,my),Point(mx+ts,my+ts),0);
     samples(x-(mx-w2));
-    if(++n==SAMPLE_SIZE) {
-      return median(samples);
-    }
+    n++;
   }
+  return median(samples);
 }
 
 cv::Mat get_green(cv::Mat cfa_LR) {
@@ -98,34 +67,26 @@ cv::Mat get_green(cv::Mat cfa_LR) {
   return green;
 }
 
-void convert_worker(AsyncQueue<std::string>* queue) {
+void convert_task(std::string line) {
   using namespace cv;
   using namespace std;
-  while(true) {
-    // pop a job atomically
-    string line = queue->pop();
-    if(line=="stop") {
-      return;
-    }
-    typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
-    vector<string> fields;
-    Tokenizer tok(line);
-    fields.assign(tok.begin(),tok.end());
-    string inpath = fields.front();
-    int offset = (int)(atoi(fields.back().c_str()));
-    Mat y_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
-    Mat green = get_green(y_LR);
-    boost::regex re(".*/(.*)\\.tif");
-    string fname = regex_replace(inpath,re,"\\1");
-    green /= 255;
-    Mat green_8u;
-    green.convertTo(green_8u,CV_8U);
-    boost::regex re2("FNAME");
-    string fgreen = regex_replace(string("xoff_testset/FNAME.png"),re2,fname);
-    imwrite(fgreen,green_8u);
-    //int x = doit(green);
-    cout << fname << ".png," << offset / 2 << endl;
-  }
+  typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
+  vector<string> fields;
+  Tokenizer tok(line);
+  fields.assign(tok.begin(),tok.end());
+  string inpath = fields.front();
+  int offset = (int)(atoi(fields.back().c_str()));
+  Mat y_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
+  Mat green = get_green(y_LR);
+  boost::regex re(".*/(.*)\\.tif");
+  string fname = regex_replace(inpath,re,"\\1");
+  green /= 255;
+  Mat green_8u;
+  green.convertTo(green_8u,CV_8U);
+  boost::regex re2("FNAME");
+  string fgreen = regex_replace(string("xoff_testset/FNAME.png"),re2,fname);
+  imwrite(fgreen,green_8u);
+  cout << fname << ".png," << offset / 2 << endl;
 }
 
 void align_task(std::string line) {
@@ -142,17 +103,6 @@ void align_task(std::string line) {
   Mat y_LR = imread(inpath);
   int x = align(y_LR);
   cout << fname << "," << offset << "," << x << endl;
-}
-
-void align_worker(AsyncQueue<std::string>* queue) {
-  using namespace std;
-  while(true) {
-    string line = queue->pop();
-    if(line=="stop") {
-      return;
-    }
-    align_task(line);
-  }
 }
 
 void xoff_test(int argc, char **argv) {

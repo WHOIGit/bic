@@ -2,11 +2,12 @@
 #include <string>
 #include <fstream>
 #include <opencv2/opencv.hpp>
+#include <boost/thread.hpp>
+#include <boost/asio.hpp>
 #include <boost/tokenizer.hpp>
 
 #include "demosaic.hpp"
 #include "illumination.hpp"
-#include "threadutils.hpp"
 
 using namespace std;
 using namespace cv;
@@ -18,136 +19,72 @@ using illum::MultiLightfield;
 // hardcoded input and output parameters
 #define PATH_FILE "alts.csv"
 #define MODEL_FILE "model.tiff"
+#define BAYER_PATTERN "rggb"
 #define OUT_DIR "out"
 #define N_THREADS 12
 
-// a learn job just specifies an input pathname and an altitude
-// or its stop flag is true, telling the worker to stop
-class LearnJob {
-public:
-  string inpath;
-  int altitude;
-  bool stop;
-  LearnJob(String inp, float alt=150) {
-    inpath = inp;
-    altitude = alt;
-    stop = false;
+// the learn task adds an image to a multilightfield model
+void learn_task(MultiLightfield<int> *model, string inpath, int alt) {
+  static boost::mutex mutex; // shared lock for lightfield (is static sufficient?)
+  // get the input pathname
+  cout << "POPPED " << inpath << " " << alt << endl;
+  // read the image (this can be done in parallel)
+  Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
+  cout << "Read " << inpath << endl;
+  { // now lock the lightfield just long enough to add the image
+    boost::lock_guard<boost::mutex> lock(mutex);
+    model->addImage(cfa_LR, alt);
   }
-  LearnJob() {
-    stop = true;
-  }
-};
-
-// the learn worker accepts jobs from a queue and adds them to a lightfield
-void learn_worker(MultiLightfield<int> *model, AsyncQueue<LearnJob>* queue) {
-  static boost::mutex mutex; // shared lock for lightfield
-  while(true) { // indefinitely,
-    // atomically receive a job (this will block if the queue is empty,
-    // and not return until jobs are pushed on the queue)
-    LearnJob job = queue->pop();
-    if(job.stop) { // is its stop flag true?
-      cout << "DONE with one thread" << endl;
-      return; // exit the thread
-    } else {
-      // get the input pathname
-      string inpath = job.inpath;
-      cout << "POPPED " << inpath << " " << job.altitude << endl;
-      // read the image (this can be done in parallel)
-      Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
-      cout << "Read " << inpath << endl;
-      { // now lock the lightfield just long enough to add the image
-	boost::lock_guard<boost::mutex> lock(mutex);
-	model->addImage(cfa_LR, job.altitude);
-      }
-      cout << "Added " << inpath << endl;
-    }
-  }
+  cout << "Added " << inpath << endl;
 }
 
-// a correct job just has an input path and output path
-// and an altitude
-class CorrectJob {
-public:
-  string inpath;
-  string outpath;
-  int altitude;
-  bool stop;
-  CorrectJob(string inp, string outp, int alt=150) {
-    inpath = inp;
-    outpath = outp;
-    altitude = alt;
-    stop = false;
-  }
-  CorrectJob() {
-    stop = true;
-  }
-};
-
-// the learn worker accepts jobs from a queue and corrects images
-void correct_worker(MultiLightfield<int> *model, AsyncQueue<CorrectJob>* queue) {
-  while(true) {
-    // pop a job atomically
-    CorrectJob job = queue->pop();
-    if(job.stop) { // and stop if necessary
-      cout << "DONE with one thread" << endl;
-      return;
-    }
-    // no synchronization required as we are reading from the shared lighfield
-    string inpath = job.inpath;
-    string outpath = job.outpath;
-    cout << "POPPED " << inpath << " " << job.altitude << endl;
-    Mat average = model->getAverage(job.altitude);
-    // now smooth the average
-    int h = average.size().height;
-    int w = average.size().width;
-    Mat left = Mat(average,Rect(0,0,w/2,h));
-    Mat right = Mat(average,Rect(w/2,0,w/2,h));
-    cfa_smooth(left,left,31);
-    cfa_smooth(right,right,31);
-    cout << "SMOOTHED lightmap" << endl;
-    Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
-    illum::correct(cfa_LR, cfa_LR, average);
-    cout << "Demosaicing " << inpath << endl;
-    Mat rgb_LR = demosaic(cfa_LR,"rgGb");
-    cout << "Saving RGB to " << outpath << endl;
-    Mat rgb_LR_16u;
-    rgb_LR.convertTo(rgb_LR_16u, CV_16U);
-    imwrite(outpath, rgb_LR_16u);
-  }
+// the correct task corrects images
+void correct_task(MultiLightfield<int> *model, string inpath, int alt, string outpath) {
+  cout << "POPPED " << inpath << " " << alt << endl;
+  Mat average = model->getAverage(alt);
+  // now smooth the average
+  int h = average.size().height;
+  int w = average.size().width;
+  Mat left = Mat(average,Rect(0,0,w/2,h));
+  Mat right = Mat(average,Rect(w/2,0,w/2,h));
+  cfa_smooth(left,left,31);
+  cfa_smooth(right,right,31);
+  cout << "SMOOTHED lightmap" << endl;
+  Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH); // read input image
+  illum::correct(cfa_LR, cfa_LR, average); // correct it
+  cout << "Demosaicing " << inpath << endl;
+  Mat rgb_LR = demosaic(cfa_LR,BAYER_PATTERN); // demosaic it
+  cout << "Saving RGB to " << outpath << endl; // save as 16-bit
+  Mat rgb_LR_16u;
+  rgb_LR.convertTo(rgb_LR_16u, CV_16U);
+  imwrite(outpath, rgb_LR_16u); // FIXME should we save as 8-bit?
 }
 
 // learn phase
 void learn_prototype() {
+  // construct an empty lightfield model
+  MultiLightfield<int> model(100, 300, 10); // lightfield
+  // post all work
+  boost::asio::io_service io_service;
   ifstream inpaths(PATH_FILE);
   string line;
-  MultiLightfield<int> model(100, 300, 10); // lightfield
-
-  // learning
-  AsyncQueue<LearnJob> lwork; // job queue
-  boost::thread_group lworkers; // workers
-  // first, push all the work onto the queue
   typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
   vector<string> fields;
   while(getline(inpaths,line)) { // read pathames from a file
     Tokenizer tok(line);
     fields.assign(tok.begin(),tok.end());
     string inpath = fields.front();
-    int alt = (int)(atof(fields.back().c_str()) * 100);
-    lwork.push(LearnJob(inpath,alt)); // push the job
+    int alt = (int)(atof(fields.back().c_str()) * 100); // altitude in cm
+    io_service.post(boost::bind(learn_task, &model, inpath, alt));
     cout << "PUSHED " << inpath << endl;
   }
-  // now push a stop job per thread
-  for(int i = 0; i < N_THREADS; i++) {
-    lwork.push(LearnJob()); // tell thread to stop
-  }
+  boost::thread_group workers;
   // start up the work threads
   for(int i = 0; i < N_THREADS; i++) {
-    boost::thread* worker = new boost::thread(learn_worker, &model, &lwork);
-    lworkers.add_thread(worker); // add them to the thread group
+    workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
   }
-  // now join all threads. this will block until all threads have completed
-  // all work.
-  lworkers.join_all();
+  // now run all work to completion
+  io_service.run();
   cout << "SUCCESS learn phase" << endl;
 
   model.save(OUT_DIR);
@@ -155,25 +92,19 @@ void learn_prototype() {
 }
 
 void correct_prototype() {
-  // create new model
+  // load model
   MultiLightfield<int> model(100, 300, 10);
   model.load(OUT_DIR);
   cout << "LOADED model" << endl;
 
-  // add all the jobs (see learn_prototype for how this works)
-  AsyncQueue<CorrectJob> cwork;
-  boost::thread_group cworkers;
-  for(int i = 0; i < N_THREADS; i++) {
-    boost::thread* worker = new boost::thread(correct_worker, &model, &cwork);
-    cworkers.add_thread(worker);
-  }
-  ifstream inpaths2(PATH_FILE);
+  // post all work
+  boost::asio::io_service io_service;
+  ifstream inpaths(PATH_FILE);
   string line;
-  int count = 0;
   typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
   vector<string> fields;
-  while(getline(inpaths2,line)) {
-    // FIXME only correcting every 5th image
+  int count = 0;
+  while(getline(inpaths,line)) { // read pathames from a file
     if(count % 5 == 0) {
       Tokenizer tok(line);
       fields.assign(tok.begin(),tok.end());
@@ -183,14 +114,12 @@ void correct_prototype() {
       string outpath;
       outpaths << OUT_DIR << "/correct" << count << ".tiff";
       outpath = outpaths.str();
-      cwork.push(CorrectJob(inpath,outpath,alt));
+      io_service.post(boost::bind(correct_task, &model, inpath, alt, outpath));
       cout << "PUSHED " << inpath << endl;
     }
     count++;
   }
-  for(int i = 0; i < N_THREADS; i++) {
-    cwork.push(CorrectJob()); // tell thread to stop
-  }
-  cworkers.join_all();
+  // now run all work to completion
+  io_service.run();
   cout << "SUCCESS correct phase" << endl;
 }
