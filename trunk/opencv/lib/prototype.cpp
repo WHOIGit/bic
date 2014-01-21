@@ -119,6 +119,11 @@ void correct_prototype() {
     }
     count++;
   }
+  boost::thread_group workers;
+  // start up the work threads
+  for(int i = 0; i < N_THREADS; i++) {
+    workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
+  }
   // now run all work to completion
   io_service.run();
   cout << "SUCCESS correct phase" << endl;
