@@ -5,10 +5,12 @@
 using namespace std;
 
 int main(int argc, char **argv) {
-  //xoff_test(argc,argv);
-  if(string(argv[1])=="learn") {
+  string command = string(argv[1]);
+  if(command=="learn") {
     learn_prototype();
-  } else {
+  } else if(command=="correct") {
     correct_prototype();
+  } else {
+    xoff_test(argc,argv);
   }
 }

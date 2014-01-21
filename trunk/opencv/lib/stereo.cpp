@@ -11,13 +11,14 @@
 #include <boost/accumulators/statistics/stats.hpp>
 #include <boost/accumulators/statistics/median.hpp>
 
+#include "stereo.hpp"
 #include "demosaic.hpp"
 
-int align(cv::Mat y_LR_in) {
+#define N_THREADS 12
+
+int stereo::align(cv::Mat y_LR_in, int template_size) {
   using namespace std;
-  static uint64 seed = time(NULL);
   using namespace cv;
-  static RNG rng(seed);
   Mat y_LR;
   y_LR_in.convertTo(y_LR, CV_32F);
   // metrics
@@ -27,8 +28,15 @@ int align(cv::Mat y_LR_in) {
   int w2 = w/2; // half the width (split between image pair)
   int w4 = w/4; // 1/4 the width (center of left image)
   int w34 = w2 + w4; // 3/4 the width (center of right image)
-  int ts = 64; // template size
+  int ts = template_size; // template size
   int ts2 = ts / 2;
+  // generate a seed from image data so as:
+  // - to make results reproducible per-image
+  // - to reduce aliasing in cases where frames share non-moving objects
+  double seedPixel = y_LR.at<double>(h2,w34); // center of right frame
+  // now convert to raw bytes
+  uint64 seedValue = uint64(seedPixel);
+  RNG rng(seedValue); // always use same seed
   // take at least SAMPLE_SIZE samples
   int SAMPLE_SIZE=5, n=0;
   using namespace boost::accumulators;
@@ -101,7 +109,7 @@ void align_task(std::string line) {
   string inpath = "xoff_testset/";
   inpath += fname;
   Mat y_LR = imread(inpath);
-  int x = align(y_LR);
+  int x = stereo::align(y_LR);
   cout << fname << "," << offset << "," << x << endl;
 }
 
@@ -115,7 +123,6 @@ void xoff_test(int argc, char **argv) {
     io_service.post(boost::bind(align_task, line));
   }
   boost::thread_group workers; // workers
-  int N_THREADS=3;
   for(int i = 0; i < N_THREADS; ++i) {
     workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
   }
