@@ -6,6 +6,7 @@
 #include <boost/asio.hpp>
 #include <boost/tokenizer.hpp>
 
+#include "prototype.hpp"
 #include "demosaic.hpp"
 #include "illumination.hpp"
 
@@ -61,7 +62,7 @@ void correct_task(MultiLightfield<int> *model, string inpath, int alt, string ou
 }
 
 // learn phase
-void learn_prototype() {
+void prototype::learn() {
   // construct an empty lightfield model
   MultiLightfield<int> model(100, 300, 10); // lightfield
   // post all work
@@ -91,7 +92,7 @@ void learn_prototype() {
   cout << "SAVED model" << endl;
 }
 
-void correct_prototype() {
+void prototype::correct() {
   // load model
   MultiLightfield<int> model(100, 300, 10);
   model.load(OUT_DIR);
@@ -127,4 +128,53 @@ void correct_prototype() {
   // now run all work to completion
   io_service.run();
   cout << "SUCCESS correct phase" << endl;
+}
+
+// test altitude pitch roll code
+
+void prototype::test_alt_pitch_roll() {
+  using namespace std;
+  float focal_length_px = 2764.0; // value taken from JRock's code
+  float pixel_sep = 0.0000065; // value taken from JHowland's code
+  float focal_length_m = focal_length_px * pixel_sep;
+  // V4 image metrics
+  int width = 1360;
+  int height = 1024;
+  for(float alt = 0.5; alt < 4; alt += 0.25) {
+    for(float pitch = -10; pitch <= 10; pitch += 5) {
+      for(float roll = 20; roll >= -20; roll -= 5) {
+	// JRock uses 3.14 as an approximation of Pi, so I'll use that too
+	float pitch_rad = (3.14 * pitch / 180.0);
+	float roll_rad = (3.14 * roll / 180.0);
+	// compute both maps
+	cv::Mat jmf_apr = interp::alt_pitch_roll(alt, pitch_rad, roll_rad, width, height, width, height, focal_length_m, pixel_sep);
+	cv::Mat jrock_apr = jrock_calculate_altitude_map(alt, pitch, roll, width, height, focal_length_px);
+	// convert jmf output to double precision
+	cv::Mat jmf_apr_64;
+	jmf_apr.convertTo(jmf_apr_64, CV_64F); // FIMXE was jmf_apr
+	// compute absolute difference between them
+	cv::Mat diff(width, height, CV_64F);
+	cv::absdiff(jmf_apr_64, jrock_apr, diff);
+	// now compute mean of absolute difference
+	cv::Scalar savg_diff = cv::mean(diff);
+	double avg_diff = savg_diff[0];
+	// if the avg diff is over 1cm then there's probably a problem
+	// and we should write out the matrices as images and exit
+	if(avg_diff > 0.01) {
+	  cv::Mat out(height, width*2, CV_8U);
+	  // arbitrarily scale from substrate to alt*2
+	  jmf_apr = (jmf_apr / (alt*2)) * 255;
+	  jrock_apr = (jrock_apr / (alt*2)) * 255;
+	  cv::Mat left = cv::Mat(out, cv::Rect(0, 0, width, height));
+	  cv::Mat right = cv::Mat(out, cv::Rect(width, 0, width, height));
+	  jmf_apr.convertTo(left, CV_8U);
+	  jrock_apr.convertTo(right, CV_8U);
+	  cout << "FAIL at altitude " << alt << "m, pitch " << pitch << "deg, roll " << roll << "deg" << endl;
+	  imwrite("too_different.png",out);
+	  exit(-1);
+	}
+      }
+    }
+    cout << "PASS altitude " << alt << "m" << endl;
+  }
 }

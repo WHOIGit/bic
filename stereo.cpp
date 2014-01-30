@@ -113,7 +113,7 @@ void align_task(std::string line) {
   cout << fname << "," << offset << "," << x << endl;
 }
 
-void xoff_test(int argc, char **argv) {
+void stereo::xoff_test(int argc, char **argv) {
   using namespace std;
   cout << "name,python,cpp" << endl;
   boost::asio::io_service io_service;

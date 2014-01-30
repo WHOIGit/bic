@@ -20,6 +20,6 @@ namespace stereo {
    * @return the pixel offset between the images
    */
   int align(cv::Mat y_LR, int template_size=64);
+  //
+  void xoff_test(int argc, char **argv); // FIXME testing
 }
-
-void xoff_test(int argc, char **argv);

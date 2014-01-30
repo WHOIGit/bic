@@ -7,10 +7,12 @@ using namespace std;
 int main(int argc, char **argv) {
   string command = string(argv[1]);
   if(command=="learn") {
-    learn_prototype();
+    prototype::learn();
   } else if(command=="correct") {
-    correct_prototype();
+    prototype::correct();
+  } else if(command=="apr") {
+    prototype::test_alt_pitch_roll();
   } else {
-    xoff_test(argc,argv);
+    stereo::xoff_test(argc,argv);
   }
 }

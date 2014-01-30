@@ -1,5 +1,7 @@
 #pragma once
 
-void learn_prototype();
-void correct_prototype();
-
+namespace prototype {
+  void learn();
+  void correct();
+  void test_alt_pitch_roll();
+}
