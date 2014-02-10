@@ -88,8 +88,8 @@ void interp::distance_map(cv::OutputArray _dst, double altitude, double pitch, d
   int xres = dst.size().width;
   int yres = dst.size().height;
 
-  Mat I(xres, yres, CV_32F);
-  Mat J(xres, yres, CV_32F);
+  Mat I(yres, xres, CV_32F);
+  Mat J(yres, xres, CV_32F);
 
   double istep = width / (xres-1);
   double jstep = height / (yres-1);
@@ -184,7 +184,6 @@ void interp::dist_weight(cv::Mat D, cv::OutputArray _dst, double delta, int i) {
   if(minD/delta >= i + 1 || maxD/delta <= i - 1) {
     return;
   }
-  std::cout << i << std::endl; // FIXME debug
   // if so compute 1 - | D/delta - i |
   dst = 1 - cv::abs(D/delta - i);
   // set to 0 where < 0
