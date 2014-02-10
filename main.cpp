@@ -11,7 +11,7 @@ int main(int argc, char **argv) {
   } else if(command=="correct") {
     prototype::correct();
   } else if(command=="apr") {
-    prototype::test_alt_pitch_roll();
+    prototype::test_distance_map();
   } else {
     stereo::xoff_test(argc,argv);
   }

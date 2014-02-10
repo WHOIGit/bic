@@ -9,6 +9,7 @@
 #include "prototype.hpp"
 #include "demosaic.hpp"
 #include "illumination.hpp"
+#include "interpolation.hpp"
 
 using namespace std;
 using namespace cv;
@@ -176,5 +177,38 @@ void prototype::test_alt_pitch_roll() {
       }
     }
     cout << "PASS altitude " << alt << "m" << endl;
+  }
+}
+
+void prototype::test_distance_map() {
+  using cv::Mat;
+  double alt = 0.7;
+  double pitch = M_PI * -12 / 180.0;
+  double roll = M_PI * -33 / 180.0;
+  double pixel_sep = 0.0000065;
+  double width = 1001 * pixel_sep;
+  double height = 1001 * pixel_sep;
+  double focal_length = 0.012;
+
+  Mat D = Mat::zeros(50, 50, CV_32F);
+  interp::distance_map(D, alt, pitch, roll, width, height, focal_length);
+
+  double minD, maxD;
+  cv::minMaxLoc(D, &minD, &maxD);
+
+  std::cout << minD << "," << maxD << endl;
+
+  double delta = 0.1;
+
+  Mat W = Mat::zeros(D.size(), CV_32F);
+  for(int i = 0; i < 12; i++) {
+    interp::dist_weight(D, W, delta, i);
+    stringstream outpaths;
+    string outpath;
+    outpaths << "weight_" << i << ".tiff";
+    W *= 256;
+    Mat W_16u;
+    W.convertTo(W_16u, CV_16U);
+    imwrite(outpaths.str(), W);
   }
 }

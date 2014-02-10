@@ -36,6 +36,45 @@ namespace interp {
    * @author Joe Futrelle (OpenCV port)
    */
   cv::Mat alt_pitch_roll(float altitude, float pitch, float roll, int width=1360, int height=1024, int xres=1360, int yres=1024, float focal_length=0.012, float pixel_sep=0.0000065);
+
+  /**
+   * Compute distance to substrate per-pixel given altitude, pitch,
+   * roll, and camera metrics (focal length, size of pixel on sensor).
+   *
+   * // FIXME determine if the following sentence is true:
+   * The orientation of the image is assumed to be such that pitch
+   * is a clockwise rotation around the y axis and roll is a clockwise
+   * rotation around the x axis.
+   *
+   * The output matrix can be computed at reduced resolution and/or a
+   * different aspect ratio by setting the xres and yres parameters
+   * independently of the height and width parameters.
+   *
+   * @param _dst output matrix at desired resolution
+   * @param altitude altitude
+   * @param pitch pitch in radians
+   * @param roll roll in radians
+   * @param width width of sensor
+   * @param height height of sensor
+   * @param focal_length effective focal length
+   *
+   * The output matrix can be upscaled to full camera resolution to
+   * approximate the per-pixel substrate distance.
+   *
+   * @author Joe Futrelle
+   */
+  void distance_map(cv::OutputArray _dst, double altitude, double pitch, double roll, double width=0.00884, double height=0.006656, double focal_length=0.012);
+
+  /**
+   * Discretize a distance map D in the distance dimension as
+   * weights on a set of equally-spaced distance components
+   *
+   * @param D the distance map
+   * @param _dst output array (same size/type as D)
+   * @param delta spacing of distance components
+   * @param i compute D's weight for component with d = i * delta
+   */
+  void dist_weight(cv::Mat D, cv::OutputArray _dst, double delta=1.0, int i=0);
 }
 
 template <typename T> class interp::LinearBinning {
