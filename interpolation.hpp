@@ -8,9 +8,14 @@ namespace interp {
    * Compute distance to substrate per-pixel given altitude, pitch,
    * roll, and camera metrics (focal length, size of pixel on sensor).
    *
-   * The orientation of the image is assumed to be such that pitch
-   * is a clockwise rotation around the y axis and roll is a clockwise
-   * rotation around the x axis.
+   * The orientation of the image is assumed to be such that pitch is
+   * a clockwise rotation around the y axis and roll is a clockwise
+   * rotation around the x axis. As a result positive pitch brings the
+   * substrate closer to the camera at the top (leading) edge of the
+   * frame, and positive roll brings the substrate closer to the
+   * camera at the right edge of the frame. If the camera is oriented
+   * differently, transpose and/or change the signs of the pitch and
+   * roll inputs.
    *
    * The output matrix can be computed at reduced resolution and/or a
    * different aspect ratio by setting the xres and yres parameters
@@ -23,8 +28,8 @@ namespace interp {
    * @param height height of frame in pixels
    * @param xres resolution of output matrix along width dimension
    * @param yres resolution of output matrix along height dimension
-   * @param focal_length EFL in meters
-   * @param pixel_sep distance between real pixel centers in meters
+   * @param focal_length effective focal length in meters
+   * @param pixel_sep distance between pixel centers in meters at the sensor
    *
    * @return matrix, at specified resolution, containing distance to
    * substrate in meters

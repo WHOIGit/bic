@@ -32,15 +32,15 @@ cv::Mat interp::alt_pitch_roll(float altitude, float pitch, float roll, int widt
   Mat yd = (tb + tan_pitch) / (1.0 - (tb * tan_pitch));
   // xy distance map
   Mat xd2, yd2;
-  cv::pow(xd,2,xd2);
-  cv::pow(yd,2,yd2);
+  cv::pow(xd,2,xd2); // xd2 = xd^2
+  cv::pow(yd,2,yd2); // yd2 = yd^2
   Mat D;
-  cv::sqrt(1.0 + xd2 + yd2, D);
+  cv::sqrt(1.0 + xd2 + yd2, D); // D = sqrt(1 + xd^2 + yd^2)
   Mat X2, Y2;
-  cv::pow(X,2,X2);
-  cv::pow(Y,2,Y2);
+  cv::pow(X,2,X2); // X2 = X^2 (square of x displacement from center in pixels)
+  cv::pow(Y,2,Y2); // Y2 = Y^2 (square of y displacement from center in pixels)
   Mat eXY;
-  cv::sqrt(pow(efl,2) + X2 + Y2, eXY);
+  cv::sqrt(pow(efl,2) + X2 + Y2, eXY); // eXY = sqrt(efl^2 + X^2 + Y^2)
   // to convert from pixels back to meters,
   // simplify
   // given efl = focal_length / pixel_sep

@@ -141,6 +141,19 @@ void prototype::test_alt_pitch_roll() {
   // V4 image metrics
   int width = 1360;
   int height = 1024;
+  // first, generate an example
+  //
+  float alt = 1.0;
+  float pitch = M_PI * 0 / 180.0;
+  float roll = M_PI * 0 / 180.0;
+  cv::Mat apr = interp::alt_pitch_roll(alt,pitch,roll,width,height,width,height,focal_length_m,pixel_sep);
+  apr *= 32000;
+  cv::Mat out;
+  apr.convertTo(out, CV_16U);
+  imwrite("apr.tiff",out);
+  cout << "wrote example" << endl;
+  exit(-1);
+  //
   for(float alt = 0.5; alt < 4; alt += 0.25) {
     for(float pitch = -10; pitch <= 10; pitch += 5) {
       for(float roll = 20; roll >= -20; roll -= 5) {
@@ -159,9 +172,9 @@ void prototype::test_alt_pitch_roll() {
 	// now compute mean of absolute difference
 	cv::Scalar savg_diff = cv::mean(diff);
 	double avg_diff = savg_diff[0];
-	// if the avg diff is over 1cm then there's probably a problem
+	// if the avg diff is over 0.1mm then there's probably a problem
 	// and we should write out the matrices as images and exit
-	if(avg_diff > 0.01) {
+	if(avg_diff > 0.0001) {
 	  cv::Mat out(height, width*2, CV_8U);
 	  // arbitrarily scale from substrate to alt*2
 	  jmf_apr = (jmf_apr / (alt*2)) * 255;
