@@ -2,7 +2,7 @@
 
 // FIXME does this handle 0 pitch/roll correctly?
 // FIXME does this correctly convert back to meters at the end?
-cv::Mat interp::alt_pitch_roll(float altitude, float pitch, float roll, int width, int height, int xres, int yres, float focal_length, float pixel_sep) {
+cv::Mat interp::jrock_pitch_roll(float altitude, float pitch, float roll, int width, int height, int xres, int yres, float focal_length, float pixel_sep) {
   using cv::Mat;
   // to enable element-wise operations, construct matricies of x and y
   // distance from center of frame, in pixels, at specified xres/yres
@@ -73,8 +73,8 @@ void interp::distance_map(cv::OutputArray _dst, double altitude, double pitch, d
   // ei = [a b c] = [1 0 0]
   // ej = [l m n] = [0 1 0]
 
-  Mat ei = (Mat_<float>(3,1) << 1, 0, 0);
-  Mat ej = (Mat_<float>(3,1) << 0, 1, 0);
+  Mat ei = (Mat_<float>(3,1) <<  1, 0, 0);
+  Mat ej = (Mat_<float>(3,1) <<  0, 1, 0);
 
   // Li = [i j -f]  // location of pixel on sensor
 
@@ -103,30 +103,49 @@ void interp::distance_map(cv::OutputArray _dst, double altitude, double pitch, d
     }
   }
 
-  // apply pitch / roll rotations
+  // apply pitch / roll rotations if necessary
 
   // compute rotation matrices
-  // pitch
-  float sinp = sin(pitch);
-  float cosp = cos(pitch);
 
-  Mat Rp = (Mat_<float>(3,3) <<
-	    1,    0,    0,
-	    0, cosp,-sinp,
-	    0, sinp, cosp);
+  Mat abc = ei;
+  Mat lmn = ej;
+
+  // apply pitch before roll, assuming that pitch and roll are small
+  // enough to make order-dependency not matter much
+
+  // pitch
+  if(pitch != 0) {
+    // assuming the top of the frame depicts substrate that is closer
+    // when pitch is positive (pitched forward), invert pitch relative
+    // to basis vector
+    float sinp = sin(0-pitch);
+    float cosp = cos(0-pitch);
+
+    Mat Rp = (Mat_<float>(3,3) <<
+	      1,    0,    0,
+	      0, cosp,-sinp,
+	      0, sinp, cosp);
+
+    abc = Rp * abc;
+    lmn = Rp * lmn;
+  }
 
   // roll
-  float sinr = sin(roll);
-  float cosr = cos(roll);
+  if(roll != 0) {
+    // assuming that the right of the frame depicts substrate that
+    // is closer when roll is positive (pitched to the right), leave
+    // roll as is relative to basis vector
+    float sinr = sin(roll);
+    float cosr = cos(roll);
 
-  Mat Rr = (Mat_<float>(3,3) <<
-	    cosr, 0,-sinr,
-	    0,    1,    0,
-	    sinr, 0, cosr);
+    Mat Rr = (Mat_<float>(3,3) <<
+	      cosr, 0,-sinr,
+	      0,    1,    0,
+	      sinr, 0, cosr);
 
-  // perform rotations in pitch, roll order
-  Mat abc = Rr * (Rp * ei);
-  Mat lmn = Rr * (Rp * ej);
+    abc = Rr * abc;
+    lmn = Rr * lmn;
+  }
 
   // assign to variables
   float a = abc.at<float>(0,0);

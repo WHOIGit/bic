@@ -1,3 +1,4 @@
+
 #pragma once
 #include <exception>
 #include <fstream>
@@ -33,7 +34,7 @@
  */
 namespace illum {
   class Lightfield;
-  template <typename T> class MultiLightfield;
+  class MultiLightfield;
   void correct(cv::InputArray src, cv::OutputArray dst, cv::Mat lightfield);
 };
 
@@ -193,94 +194,97 @@ public:
  * generated from arbitrary altitudes in the multi-lightfield's
  * altitude range via interpolation.
  */
-template <typename T> class illum::MultiLightfield {
+class illum::MultiLightfield {
   typedef cv::Mat Mat;
   typedef std::string string; 
 private:
-  // FIXME enable extensible interpolation methods
-  typename interp::LinearBinning<T> binning; // interpolation method
-  typename std::vector<Slice<T>* > slices; // altitude slices
-  Slice<T>* getSlice(T alt) { // accessor for slice by altitude
-    typename std::vector<Slice<T>* >::iterator it = slices.begin();
+  typename std::vector<Slice<int>* > slices; // altitude slices
+  double alt_step;
+  double pixel_sep;
+  double focal_length;
+  Slice<int>* getSlice(int i) { // accessor for slice by altitude bin
+    typename std::vector<Slice<int>* >::iterator it = slices.begin();
     for(; it != slices.end(); ++it) {
-      Slice<T>* slice = *it;
-      if(slice->getAlt() == alt) {
+      Slice<int>* slice = *it;
+      if(slice->getAlt() == i) {
 	return slice;
       }
     }
+    // the slice doesn't exist, create it
+    Slice<int>* slice = new Slice<int>(i);
+    slices.push_back(slice);
+    return slice;
   }
 public:
   /**
    * Create a multi-altitude lightfield.
-   * @param low the lowest altitude
-   * @param high the highest altitude
-   * @param width the width of each altitude bin
+   * @param step_m the width of each altitude bin in m (default: 10cm)
+   * @param focal_length_m the effective focal length in m (default: 12mm)
+   * @param pixel_sep_m the physical size of a pixel in m (default: 6.5um)
    */
-  MultiLightfield(T low, T high, T width) {
-    binning = interp::LinearBinning<T>(low, high, width);
-    std::vector<T> bins = binning.getBins();
-    typename std::vector<T>::iterator it = bins.begin();
-    for(; it != bins.end(); ++it) {
-      slices.push_back(new Slice<T>(*it));
-    }
+  MultiLightfield(double step_m=0.1, double focal_length_m=0.012, double pixel_sep_m=0.0000065) {
+    alt_step = step_m;
+    focal_length = focal_length_m;
+    pixel_sep = pixel_sep_m;
   }
   /**
    * Add an image to the lightfield
    * @param image the image to add
    * @param alt the altitude the image was taken at
+   * @param pitch the pitch of the vehicle
+   * @param roll the roll of the vehicle
    */
-  void addImage(Mat image, T alt) {
-    using namespace std;
-    vector<pair<T,double> > result = binning.interpolate(alt);
-    typename vector<pair<T,double> >::iterator it = result.begin();
-    for(; it != result.end(); ++it) {
-      pair<T,double> p = *it;
-      T sAlt = p.first; // altitude
-      double alpha = p.second; // contribution to this altitude's slice
-      if(alpha > 0) {
-	Slice<T>* slice = getSlice(sAlt);
-	slice->getLightfield()->addImage(image, alpha);
-      }
+  void addImage(Mat image, double alt, double pitch, double roll) {
+    // FIXME compute a low resolution and upscale
+    // compute distance map
+    int width = image.size().width;
+    int height = image.size().height;
+    Mat D = Mat::zeros(height, width, CV_32F);
+    double width_m = width * pixel_sep;
+    double height_m = height * pixel_sep;
+    interp::distance_map(D, alt, pitch, roll, width_m, height_m, focal_length);
+    // now discretize into slices
+    int i = 0;
+    Mat W = Mat::zeros(D.size(), CV_32F);
+    while(cv::countNonZero(W) == 0) {
+      interp::dist_weight(D, W, alt_step, i++);
+    }
+    while(cv::countNonZero(W) > 0) {
+      Slice<int>* slice = getSlice(i);
+      slice->getLightfield()->addImage(image, W);
+      interp::dist_weight(D, W, alt_step, i++);
     }
   }
   /**
    * Get the average image at the given altitude.
    * If the altitude is not located exactly at one of the altitude bins,
-   * the average image is interpolated between two adjacent bins.
-   * @param alt the altitude
+   * the average image is interpolated between any overlapping bins.
+   * @param dst the output image (zeros at desired resolution)
+   * @param alt the altitude the image was taken at
+   * @param pitch the pitch of the vehicle
+   * @param roll the roll of the vehicle
    */
-  Mat getAverage(T alt) {
-    Mat average;
-    std::vector<std::pair<T,double> > result = binning.interpolate(alt);
-    typename std::vector<std::pair<T,double> >::iterator it = result.begin();
-    for(; it != result.end(); ++it) {
-      std::pair<T,double> p = *it;
-      T sAlt = p.first; // altitude
-      double alpha = p.second; // contribution to this altitude's slice
-      if(alpha > 0) {
-	// nonzero contribution. find the slice
-	Slice<T>* slice = getSlice(sAlt);
-	Mat sAverage = slice->getLightfield()->getAverage();
-	if(average.empty()) {
-	  average.create(sAverage.size(), CV_32F);
-	}
-	average += sAverage.mul(alpha);
-      }
+  void getAverage(cv::OutputArray _dst, double alt, double pitch, double roll) {
+    Mat dst = _dst.getMat();
+    // FIXME tiles
+    int width = dst.size().width;
+    int height = dst.size().height;
+    Mat D = Mat::zeros(height, width, CV_32F);
+    double width_m = width * pixel_sep;
+    double height_m = height * pixel_sep;
+    interp::distance_map(D, alt, pitch, roll, width_m, height_m, focal_length);
+    // now discretize into slices
+    int i = 0;
+    Mat W = Mat::zeros(D.size(), CV_32F);
+    while(cv::countNonZero(W) == 0) {
+      interp::dist_weight(D, W, alt_step, i++);
     }
-    // FIXME memoize or at least cache slice averages
-    return average;
-  }
-  /**
-   * Get the average image at the given altitude and store in dst.
-   * If the altitude is not located exactly at one of the altitude bins,
-   * the average image is interpolated between two adjacent bins.
-   *
-   * @param dst the destination image. must be of type CV_32F
-   * @param alt the altitude
-   */
-  void getAverage(Mat dst, T alt) {
-    assert(dst.type()==CV_32F);
-    getAverage(alt).copyTo(dst);
+    while(cv::countNonZero(W) > 0) {
+      Slice<int>* slice = getSlice(i);
+      Mat sAverage = slice->getLightfield()->getAverage();
+      dst += sAverage.mul(W); // multiply by slice weight
+      interp::dist_weight(D, W, alt_step, i++);
+    }
   }
   /**
    * Save the multi-lightfield to a directory. The lightfield is
@@ -291,14 +295,16 @@ public:
    * @param outdir the output directory
    */
   void save(string outdir) {
-    typename std::vector<Slice<T>* >::iterator it = slices.begin();
-    for(int count = 0; it != slices.end(); ++it, ++count) {
-      Slice<T>* slice = *it;
+    typename std::vector<Slice<int>* >::iterator it = slices.begin();
+    for(; it != slices.end(); ++it) {
+      Slice<int>* slice = *it;
       illum::Lightfield* lf = slice->getLightfield();
       if(!lf->empty()) {
+	int count = slice->getAlt();
 	std::stringstream outpaths;
 	outpaths << outdir << "/slice_" << count << ".tiff";
 	lf->save(outpaths.str());
+
       }
     }
   }
@@ -311,13 +317,11 @@ public:
    * @param outdir the output directory where the lightfield is stored
    */
   void load(string outdir) {
-    std::vector<T> bins = binning.getBins();
-    typename std::vector<Slice<T>* >::iterator sit = slices.begin();
-    for(int count = 0; sit != slices.end(); ++sit, ++count) {
+    for(int count = 0; count < 1000; ++count) {
       std::stringstream inpaths;
       inpaths << outdir << "/slice_" << count << ".tiff";
       if(access(inpaths.str().c_str(),F_OK) != -1) {
-	Slice<T>* slice = *sit;
+	Slice<int>* slice = getSlice(count);
 	slice->getLightfield()->load(inpaths.str());
       }
     }

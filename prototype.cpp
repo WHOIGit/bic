@@ -26,7 +26,7 @@ using illum::MultiLightfield;
 #define N_THREADS 12
 
 // the learn task adds an image to a multilightfield model
-void learn_task(MultiLightfield<int> *model, string inpath, int alt) {
+void learn_task(MultiLightfield *model, string inpath, double alt, double pitch, double roll) {
   static boost::mutex mutex; // shared lock for lightfield (is static sufficient?)
   // get the input pathname
   cout << "POPPED " << inpath << " " << alt << endl;
@@ -35,15 +35,18 @@ void learn_task(MultiLightfield<int> *model, string inpath, int alt) {
   cout << "Read " << inpath << endl;
   { // now lock the lightfield just long enough to add the image
     boost::lock_guard<boost::mutex> lock(mutex);
-    model->addImage(cfa_LR, alt);
+    model->addImage(cfa_LR, alt, pitch, roll);
   }
   cout << "Added " << inpath << endl;
 }
 
 // the correct task corrects images
-void correct_task(MultiLightfield<int> *model, string inpath, int alt, string outpath) {
+void correct_task(MultiLightfield *model, string inpath, double alt, double pitch, double roll, string outpath) {
   cout << "POPPED " << inpath << " " << alt << endl;
-  Mat average = model->getAverage(alt);
+  Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH); // read input image
+  // get the average
+  Mat average = Mat::zeros(cfa_LR.size(), CV_32F);
+  model->getAverage(average, alt, pitch, roll);
   // now smooth the average
   int h = average.size().height;
   int w = average.size().width;
@@ -52,7 +55,6 @@ void correct_task(MultiLightfield<int> *model, string inpath, int alt, string ou
   cfa_smooth(left,left,31);
   cfa_smooth(right,right,31);
   cout << "SMOOTHED lightmap" << endl;
-  Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH); // read input image
   illum::correct(cfa_LR, cfa_LR, average); // correct it
   cout << "Demosaicing " << inpath << endl;
   Mat rgb_LR = demosaic(cfa_LR,BAYER_PATTERN); // demosaic it
@@ -65,7 +67,7 @@ void correct_task(MultiLightfield<int> *model, string inpath, int alt, string ou
 // learn phase
 void prototype::learn() {
   // construct an empty lightfield model
-  MultiLightfield<int> model(100, 300, 10); // lightfield
+  illum::MultiLightfield model;
   // post all work
   boost::asio::io_service io_service;
   ifstream inpaths(PATH_FILE);
@@ -76,8 +78,10 @@ void prototype::learn() {
     Tokenizer tok(line);
     fields.assign(tok.begin(),tok.end());
     string inpath = fields.front();
-    int alt = (int)(atof(fields.back().c_str()) * 100); // altitude in cm
-    io_service.post(boost::bind(learn_task, &model, inpath, alt));
+    double alt = atof(fields.back().c_str()); // altitude in m
+    double pitch = 0;
+    double roll = 0;
+    io_service.post(boost::bind(learn_task, &model, inpath, alt, pitch, roll));
     cout << "PUSHED " << inpath << endl;
   }
   boost::thread_group workers;
@@ -95,7 +99,8 @@ void prototype::learn() {
 
 void prototype::correct() {
   // load model
-  MultiLightfield<int> model(100, 300, 10);
+  cout << "LOADING model..." << endl;
+  illum::MultiLightfield model;
   model.load(OUT_DIR);
   cout << "LOADED model" << endl;
 
@@ -111,12 +116,14 @@ void prototype::correct() {
       Tokenizer tok(line);
       fields.assign(tok.begin(),tok.end());
       string inpath = fields.front();
-      int alt = (int)(atof(fields.back().c_str()) * 100);
+      double alt = atof(fields.back().c_str());
+      double pitch = 0;
+      double roll = 0;
       stringstream outpaths;
       string outpath;
       outpaths << OUT_DIR << "/correct" << count << ".tiff";
       outpath = outpaths.str();
-      io_service.post(boost::bind(correct_task, &model, inpath, alt, outpath));
+      io_service.post(boost::bind(correct_task, &model, inpath, alt, pitch, roll, outpath));
       cout << "PUSHED " << inpath << endl;
     }
     count++;
@@ -132,73 +139,13 @@ void prototype::correct() {
 }
 
 // test altitude pitch roll code
-
-void prototype::test_alt_pitch_roll() {
-  using namespace std;
-  float focal_length_px = 2764.0; // value taken from JRock's code
-  float pixel_sep = 0.0000065; // value taken from JHowland's code
-  float focal_length_m = focal_length_px * pixel_sep;
-  // V4 image metrics
-  int width = 1360;
-  int height = 1024;
-  // first, generate an example
-  //
-  float alt = 1.0;
-  float pitch = M_PI * 0 / 180.0;
-  float roll = M_PI * 0 / 180.0;
-  cv::Mat apr = interp::alt_pitch_roll(alt,pitch,roll,width,height,width,height,focal_length_m,pixel_sep);
-  apr *= 32000;
-  cv::Mat out;
-  apr.convertTo(out, CV_16U);
-  imwrite("apr.tiff",out);
-  cout << "wrote example" << endl;
-  exit(-1);
-  //
-  for(float alt = 0.5; alt < 4; alt += 0.25) {
-    for(float pitch = -10; pitch <= 10; pitch += 5) {
-      for(float roll = 20; roll >= -20; roll -= 5) {
-	// JRock uses 3.14 as an approximation of Pi, so I'll use that too
-	float pitch_rad = (3.14 * pitch / 180.0);
-	float roll_rad = (3.14 * roll / 180.0);
-	// compute both maps
-	cv::Mat jmf_apr = interp::alt_pitch_roll(alt, pitch_rad, roll_rad, width, height, width, height, focal_length_m, pixel_sep);
-	cv::Mat jrock_apr = jrock_calculate_altitude_map(alt, pitch, roll, width, height, focal_length_px);
-	// convert jmf output to double precision
-	cv::Mat jmf_apr_64;
-	jmf_apr.convertTo(jmf_apr_64, CV_64F); // FIMXE was jmf_apr
-	// compute absolute difference between them
-	cv::Mat diff(width, height, CV_64F);
-	cv::absdiff(jmf_apr_64, jrock_apr, diff);
-	// now compute mean of absolute difference
-	cv::Scalar savg_diff = cv::mean(diff);
-	double avg_diff = savg_diff[0];
-	// if the avg diff is over 0.1mm then there's probably a problem
-	// and we should write out the matrices as images and exit
-	if(avg_diff > 0.0001) {
-	  cv::Mat out(height, width*2, CV_8U);
-	  // arbitrarily scale from substrate to alt*2
-	  jmf_apr = (jmf_apr / (alt*2)) * 255;
-	  jrock_apr = (jrock_apr / (alt*2)) * 255;
-	  cv::Mat left = cv::Mat(out, cv::Rect(0, 0, width, height));
-	  cv::Mat right = cv::Mat(out, cv::Rect(width, 0, width, height));
-	  jmf_apr.convertTo(left, CV_8U);
-	  jrock_apr.convertTo(right, CV_8U);
-	  cout << "FAIL at altitude " << alt << "m, pitch " << pitch << "deg, roll " << roll << "deg" << endl;
-	  imwrite("too_different.png",out);
-	  exit(-1);
-	}
-      }
-    }
-    cout << "PASS altitude " << alt << "m" << endl;
-  }
-}
-
-
 void prototype::test_distance_map() {
   using cv::Mat;
+  using std::cout;
+  using std::endl;
   double alt = 0.7;
-  double pitch = M_PI * -12 / 180.0;
-  double roll = M_PI * -33 / 180.0;
+  double pitch = M_PI * 0 / 180.0;
+  double roll = M_PI * 45 / 180.0;
   double pixel_sep = 0.0000065;
   double width = 1360 * pixel_sep;
   double height = 1024 * pixel_sep;
@@ -215,9 +162,25 @@ void prototype::test_distance_map() {
   Mat W = Mat::zeros(D.size(), CV_32F);
   for(int i = 0; i < 12; i++) {
     interp::dist_weight(D, W, delta, i);
-    stringstream outpaths;
-    string outpath;
-    outpaths << "weight_" << i << ".png";
-    imwrite(outpaths.str(), W * 255);
+    if(cv::countNonZero(W) == 0) {
+      cout << i << " is empty" << endl;
+    } else {
+      stringstream outpaths;
+      string outpath;
+      outpaths << "weight_" << i << ".png";
+      imwrite(outpaths.str(), W * 255);
+    }
   }
+
+  // now generate some products to test that pitch/roll are oriented
+  // correctly
+  // compare D to jrock's algorithm
+  int w = 1360;
+  int h = 1024;
+  cv::Mat Djr = interp::jrock_pitch_roll(alt, pitch, roll, w, h, w, h, focal_length, pixel_sep);
+  double minDjr, maxDjr;
+  cv::minMaxLoc(Djr, &minDjr, &maxDjr);
+
+  imwrite("Djf.png",(D-0.5)*200);
+  imwrite("Djr.png",(Djr-0.5)*200);
 }
