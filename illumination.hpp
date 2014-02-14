@@ -92,7 +92,11 @@ public:
     validate(image);
     Mat image32f;
     image.convertTo(image32f, CV_32F); // convert to floatin point
-    sum += image32f * alpha; // multiply by alpha and add to sum image
+    if(alpha != 1.0) {
+      sum += image32f * alpha; // multiply by alpha and add to sum image
+    } else {
+      sum += image32f;
+    }
     count += alpha; // add alpha to count image
   }
   /**

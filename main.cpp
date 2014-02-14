@@ -12,6 +12,8 @@ int main(int argc, char **argv) {
     prototype::correct();
   } else if(command=="apr") {
     prototype::test_effective_resolution();
+  } else if(command=="flat") {
+    prototype::test_flatness();
   } else {
     stereo::xoff_test(argc,argv);
   }

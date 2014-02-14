@@ -246,3 +246,53 @@ void prototype::test_effective_resolution() {
     imwrite(outpath,Du*100);
   }
 }
+
+void flat_task(illum::Lightfield* frameAverage, boost::mutex* mutex, string inpath) {
+  cout << "POPPED " << inpath << endl;
+  cv::Mat bgr_LR = imread(inpath);
+  if(bgr_LR.empty()) {
+    return;
+  }
+  // convert to grayscale
+  cv::Mat y_LR(bgr_LR.size().height, bgr_LR.size().width, CV_32F);
+  cv::cvtColor(bgr_LR, y_LR, CV_BGR2GRAY);
+  assert(!y_LR.empty());
+  { // protect frame average
+    boost::lock_guard<boost::mutex> lock(*mutex);
+    frameAverage->addImage(y_LR);
+  }
+  cout << "ADDED " << inpath << endl;
+}
+
+void prototype::test_flatness() {
+  boost::mutex mutex;
+  illum::Lightfield frameAverage;
+  // post all work
+  boost::asio::io_service io_service;
+  boost::thread_group workers;
+  // start up the work threads
+  // use the work object to keep threads alive before jobs are posted
+  // use auto_ptr so we can indicate that no more jobs will be posted
+  auto_ptr<boost::asio::io_service::work> work(new boost::asio::io_service::work(io_service));
+  // create the thread pool
+  for(int i = 0; i < N_THREADS; i++) {
+    workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
+  }
+  for(int i = 0; i < 3000; ++i) {
+    std::stringstream inpaths;
+    inpaths << OUT_DIR << "/correct" << i << ".tiff";
+    std::string inpath = inpaths.str();
+    if(access(inpath.c_str(),F_OK) != -1) {
+      io_service.post(boost::bind(flat_task, &frameAverage, &mutex, inpath));
+      cout << "PUSHED " << inpath << endl;
+    }
+  }
+  // destroy the work object to indicate that there are no more jobs
+  work.reset();
+  // now run all pending jobs to completion
+  workers.join_all();
+
+  std::cout << "WRITING average" << std::endl;
+  cv::Mat avg = frameAverage.getAverage();
+  imwrite("avg.tiff",avg);
+}
