@@ -295,4 +295,9 @@ void prototype::test_flatness() {
   std::cout << "WRITING average" << std::endl;
   cv::Mat avg = frameAverage.getAverage();
   imwrite("avg.tiff",avg);
+
+  // now compute some stats on the average
+  double minAvg, maxAvg;
+  cv::minMaxLoc(avg, &minAvg, &maxAvg);
+  cout << minAvg << " " << maxAvg << endl;
 }
