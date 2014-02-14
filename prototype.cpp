@@ -19,7 +19,7 @@ using illum::MultiLightfield;
 // this is a prototype application; code is not in reusable state yet
 
 // hardcoded input and output parameters
-#define PATH_FILE "alts.csv"
+#define PATH_FILE "aprs.csv"
 #define MODEL_FILE "model.tiff"
 #define BAYER_PATTERN "rggb"
 #define OUT_DIR "out"
@@ -27,22 +27,18 @@ using illum::MultiLightfield;
 
 // the learn task adds an image to a multilightfield model
 void learn_task(MultiLightfield *model, string inpath, double alt, double pitch, double roll) {
-  static boost::mutex mutex; // shared lock for lightfield (is static sufficient?)
   // get the input pathname
-  cout << "POPPED " << inpath << " " << alt << endl;
+  cout << "POPPED " << inpath << " " << alt << "," << pitch << "," << roll << endl;
   // read the image (this can be done in parallel)
   Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
   cout << "Read " << inpath << endl;
-  { // now lock the lightfield just long enough to add the image
-    boost::lock_guard<boost::mutex> lock(mutex);
-    model->addImage(cfa_LR, alt, pitch, roll);
-  }
+  model->addImage(cfa_LR, alt, pitch, roll);
   cout << "Added " << inpath << endl;
 }
 
 // the correct task corrects images
 void correct_task(MultiLightfield *model, string inpath, double alt, double pitch, double roll, string outpath) {
-  cout << "POPPED " << inpath << " " << alt << endl;
+  cout << "POPPED " << inpath << " " << alt << "," << pitch << "," << roll << endl;
   Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH); // read input image
   // get the average
   Mat average = Mat::zeros(cfa_LR.size(), CV_32F);
@@ -70,6 +66,16 @@ void prototype::learn() {
   illum::MultiLightfield model;
   // post all work
   boost::asio::io_service io_service;
+  boost::thread_group workers;
+  // start up the work threads
+  // use the work object to keep threads alive before jobs are posted
+  // use auto_ptr so we can indicate that no more jobs will be posted
+  auto_ptr<boost::asio::io_service::work> work(new boost::asio::io_service::work(io_service));
+  // create the thread pool
+  for(int i = 0; i < N_THREADS; i++) {
+    workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
+  }
+  // now read input lines and post jobs
   ifstream inpaths(PATH_FILE);
   string line;
   typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
@@ -77,20 +83,19 @@ void prototype::learn() {
   while(getline(inpaths,line)) { // read pathames from a file
     Tokenizer tok(line);
     fields.assign(tok.begin(),tok.end());
-    string inpath = fields.front();
-    double alt = atof(fields.back().c_str()); // altitude in m
-    double pitch = 0;
-    double roll = 0;
+    string inpath = fields.at(0);
+    double alt = atof(fields.at(1).c_str()); // altitude in m
+    double pitch_deg = atof(fields.at(2).c_str());
+    double roll_deg = atof(fields.at(3).c_str());
+    double pitch = M_PI * pitch_deg / 180.0;
+    double roll = M_PI * roll_deg / 180.0;
     io_service.post(boost::bind(learn_task, &model, inpath, alt, pitch, roll));
     cout << "PUSHED " << inpath << endl;
   }
-  boost::thread_group workers;
-  // start up the work threads
-  for(int i = 0; i < N_THREADS; i++) {
-    workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
-  }
-  // now run all work to completion
-  io_service.run();
+  // destroy the work object to indicate that there are no more jobs
+  work.reset();
+  // now run all pending jobs to completion
+  workers.join_all();
   cout << "SUCCESS learn phase" << endl;
 
   model.save(OUT_DIR);
@@ -106,6 +111,15 @@ void prototype::correct() {
 
   // post all work
   boost::asio::io_service io_service;
+  // use the work object to keep threads alive before jobs are posted
+  // use auto_ptr so we can indicate that no more jobs will be posted
+  auto_ptr<boost::asio::io_service::work> work(new boost::asio::io_service::work(io_service));
+  // start a thread pool
+  boost::thread_group workers;
+  for(int i = 0; i < N_THREADS; i++) {
+    workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
+  }
+  // post jobs
   ifstream inpaths(PATH_FILE);
   string line;
   typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
@@ -115,10 +129,12 @@ void prototype::correct() {
     if(count % 5 == 0) {
       Tokenizer tok(line);
       fields.assign(tok.begin(),tok.end());
-      string inpath = fields.front();
-      double alt = atof(fields.back().c_str());
-      double pitch = 0;
-      double roll = 0;
+      string inpath = fields.at(0);
+      double alt = atof(fields.at(1).c_str()); // altitude in m
+      double pitch_deg = atof(fields.at(2).c_str());
+      double roll_deg = atof(fields.at(3).c_str());
+      double pitch = M_PI * pitch_deg / 180.0;
+      double roll = M_PI * roll_deg / 180.0;
       stringstream outpaths;
       string outpath;
       outpaths << OUT_DIR << "/correct" << count << ".tiff";
@@ -128,13 +144,11 @@ void prototype::correct() {
     }
     count++;
   }
-  boost::thread_group workers;
-  // start up the work threads
-  for(int i = 0; i < N_THREADS; i++) {
-    workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
-  }
-  // now run all work to completion
-  io_service.run();
+  // destroy the work object to indicate that there are no more jobs
+  work.reset();
+  // now run all pending jobs to completion
+  workers.join_all();
+  // we're done
   cout << "SUCCESS correct phase" << endl;
 }
 
@@ -183,4 +197,52 @@ void prototype::test_distance_map() {
 
   imwrite("Djf.png",(D-0.5)*200);
   imwrite("Djr.png",(Djr-0.5)*200);
+}
+
+void prototype::test_effective_resolution() {
+  using cv::Mat;
+  using std::cout;
+  using std::endl;
+
+  // metrics: pixels
+  int width_px = 1360;
+  int height_px = 1024;
+  // metrics: meters
+  double pixel_sep = 0.0000065;
+  double width = width_px * pixel_sep;
+  double height = height_px * pixel_sep;
+  double focal_length = 0.012;
+
+  // FIXME choose alt, pitch, and roll randomly
+  double alt = 1.3;
+  double pitch = M_PI * -17 / 180.0;
+  double roll = M_PI * 33 / 180.0;
+
+  // compute full-resolution distance map
+
+  Mat D = Mat::zeros(height_px, width_px, CV_32F);
+  interp::distance_map(D, alt, pitch, roll, width, height, focal_length);
+
+  // now compute at a series of reduced resolutions
+  for(int e = 1; e < 6; e++) {
+    // calculate downscaled resolution
+    int k = pow(2,e); // 2^e
+    int w = width_px / k;
+    int h = height_px / k;
+    // compute distance map at downscaled resolution
+    Mat Dd = Mat::zeros(h, w, CV_32F);
+    interp::distance_map(Dd, alt, pitch, roll, width, height, focal_length);
+    // upscale using high-quality interpolation
+    Mat Du;
+    cv::resize(Dd, Du, D.size(), 0, 0, CV_INTER_CUBIC);
+    Mat DuD = cv::abs(Du - D);
+    double mindiff, maxdiff;
+    cv::minMaxLoc(DuD, &mindiff, &maxdiff);
+    cout << k << "x (" << w << ", " << h << "): " << maxdiff << "m" << endl;
+    stringstream outpaths;
+    string outpath;
+    outpaths << "blaz_" << k << ".png";
+    outpath = outpaths.str();
+    imwrite(outpath,Du*100);
+  }
 }

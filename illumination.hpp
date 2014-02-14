@@ -2,6 +2,7 @@
 #pragma once
 #include <exception>
 #include <fstream>
+#include <boost/thread.hpp>
 #include <opencv2/opencv.hpp>
 
 #include "interpolation.hpp"
@@ -173,6 +174,7 @@ public:
 // type parameter is the numerical type used for representing altitude
 template <typename T> class Slice {
 private:
+  boost::mutex mutex; // for threadsafety
   illum::Lightfield* lf; // model for this altitude
   T a; // altitude
 public:
@@ -185,6 +187,9 @@ public:
   }
   T getAlt() {
     return a;
+  }
+  boost::mutex* get_mutex() {
+    return &mutex;
   }
 };
 
@@ -251,7 +256,11 @@ public:
     }
     while(cv::countNonZero(W) > 0) {
       Slice<int>* slice = getSlice(i);
-      slice->getLightfield()->addImage(image, W);
+      boost::mutex* mutex = slice->get_mutex();
+      {
+	boost::lock_guard<boost::mutex> lock(*mutex);
+	slice->getLightfield()->addImage(image, W);
+      }
       interp::dist_weight(D, W, alt_step, i++);
     }
   }
@@ -304,7 +313,6 @@ public:
 	std::stringstream outpaths;
 	outpaths << outdir << "/slice_" << count << ".tiff";
 	lf->save(outpaths.str());
-
       }
     }
   }
