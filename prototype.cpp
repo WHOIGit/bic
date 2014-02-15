@@ -54,10 +54,19 @@ void correct_task(MultiLightfield *model, string inpath, double alt, double pitc
   illum::correct(cfa_LR, cfa_LR, average); // correct it
   cout << "Demosaicing " << inpath << endl;
   Mat rgb_LR = demosaic(cfa_LR,BAYER_PATTERN); // demosaic it
-  cout << "Saving RGB to " << outpath << endl; // save as 16-bit
-  Mat rgb_LR_16u;
-  rgb_LR.convertTo(rgb_LR_16u, CV_16U);
-  imwrite(outpath, rgb_LR_16u); // FIXME should we save as 8-bit?
+  /*stringstream outpath_exts;
+  string outpath_ext;
+  outpath_exts << outpath << ".png";
+  outpath_ext = outpath_exts.str();*/
+  outpath = outpath + ".png";
+  cout << "Saving RGB to " << outpath << endl;
+  // save as 8-bit png
+  // FIXME here we know a priori how to convert the values
+  Mat rgb_LR_8u;
+  double f = 255.0 / 65535.0;
+  rgb_LR *= f;
+  rgb_LR.convertTo(rgb_LR_8u, CV_8U);
+  imwrite(outpath, rgb_LR_8u);
 }
 
 // learn phase
@@ -83,10 +92,12 @@ void prototype::learn() {
   while(getline(inpaths,line)) { // read pathames from a file
     Tokenizer tok(line);
     fields.assign(tok.begin(),tok.end());
-    string inpath = fields.at(0);
-    double alt = atof(fields.at(1).c_str()); // altitude in m
-    double pitch_deg = atof(fields.at(2).c_str());
-    double roll_deg = atof(fields.at(3).c_str());
+    int f=0;
+    string inpath = fields.at(f++);
+    string outpath = fields.at(f++);
+    double alt = atof(fields.at(f++).c_str()); // altitude in m
+    double pitch_deg = atof(fields.at(f++).c_str());
+    double roll_deg = atof(fields.at(f++).c_str());
     double pitch = M_PI * pitch_deg / 180.0;
     double roll = M_PI * roll_deg / 180.0;
     io_service.post(boost::bind(learn_task, &model, inpath, alt, pitch, roll));
@@ -129,16 +140,14 @@ void prototype::correct() {
     if(count % 5 == 0) {
       Tokenizer tok(line);
       fields.assign(tok.begin(),tok.end());
-      string inpath = fields.at(0);
-      double alt = atof(fields.at(1).c_str()); // altitude in m
-      double pitch_deg = atof(fields.at(2).c_str());
-      double roll_deg = atof(fields.at(3).c_str());
+      int f=0;
+      string inpath = fields.at(f++);
+      string outpath = fields.at(f++);
+      double alt = atof(fields.at(f++).c_str()); // altitude in m
+      double pitch_deg = atof(fields.at(f++).c_str());
+      double roll_deg = atof(fields.at(f++).c_str());
       double pitch = M_PI * pitch_deg / 180.0;
       double roll = M_PI * roll_deg / 180.0;
-      stringstream outpaths;
-      string outpath;
-      outpaths << OUT_DIR << "/correct" << count << ".tiff";
-      outpath = outpaths.str();
       io_service.post(boost::bind(correct_task, &model, inpath, alt, pitch, roll, outpath));
       cout << "PUSHED " << inpath << endl;
     }
