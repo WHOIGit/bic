@@ -28,17 +28,17 @@ using illum::MultiLightfield;
 // the learn task adds an image to a multilightfield model
 void learn_task(MultiLightfield *model, string inpath, double alt, double pitch, double roll) {
   // get the input pathname
-  cout << "POPPED " << inpath << " " << alt << "," << pitch << "," << roll << endl;
+  cerr << "POPPED " << inpath << " " << alt << "," << pitch << "," << roll << endl;
   // read the image (this can be done in parallel)
   Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
-  cout << "Read " << inpath << endl;
+  cerr << "Read " << inpath << endl;
   model->addImage(cfa_LR, alt, pitch, roll);
-  cout << "Added " << inpath << endl;
+  cerr << "Added " << inpath << endl;
 }
 
 // the correct task corrects images
 void correct_task(MultiLightfield *model, string inpath, double alt, double pitch, double roll, string outpath) {
-  cout << "POPPED " << inpath << " " << alt << "," << pitch << "," << roll << endl;
+  cerr << "POPPED " << inpath << " " << alt << "," << pitch << "," << roll << endl;
   Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH); // read input image
   // get the average
   Mat average = Mat::zeros(cfa_LR.size(), CV_32F);
@@ -48,23 +48,29 @@ void correct_task(MultiLightfield *model, string inpath, double alt, double pitc
   int w = average.size().width;
   Mat left = Mat(average,Rect(0,0,w/2,h));
   Mat right = Mat(average,Rect(w/2,0,w/2,h));
+  // FIXME hardcoded param smoothing kernel size
   cfa_smooth(left,left,31);
   cfa_smooth(right,right,31);
-  cout << "SMOOTHED lightmap" << endl;
+  cerr << "SMOOTHED lightmap" << endl;
   illum::correct(cfa_LR, cfa_LR, average); // correct it
-  cout << "Demosaicing " << inpath << endl;
+  cerr << "Demosaicing " << inpath << endl;
+  // FIXME hardcoded param bayer pattern
   Mat rgb_LR = demosaic(cfa_LR,BAYER_PATTERN); // demosaic it
   /*stringstream outpath_exts;
   string outpath_ext;
   outpath_exts << outpath << ".png";
   outpath_ext = outpath_exts.str();*/
   outpath = outpath + ".png";
-  cout << "Saving RGB to " << outpath << endl;
+  cerr << "Saving RGB to " << outpath << endl;
+  // FIXME hardcoded brightness parameters
+  double max = 0.7;
+  double min = 0.05;
+  // scale brightness
+  //rgb_LR /= max - min;
+  //rgb_LR += min;
   // save as 8-bit png
-  // FIXME here we know a priori how to convert the values
   Mat rgb_LR_8u;
-  double f = 255.0 / 65535.0;
-  rgb_LR *= f;
+  rgb_LR = rgb_LR * (255.0 / (65535.0 * (max - min))) - (min * 255.0);
   rgb_LR.convertTo(rgb_LR_8u, CV_8U);
   imwrite(outpath, rgb_LR_8u);
 }
@@ -101,24 +107,24 @@ void prototype::learn() {
     double pitch = M_PI * pitch_deg / 180.0;
     double roll = M_PI * roll_deg / 180.0;
     io_service.post(boost::bind(learn_task, &model, inpath, alt, pitch, roll));
-    cout << "PUSHED " << inpath << endl;
+    cerr << "PUSHED " << inpath << endl;
   }
   // destroy the work object to indicate that there are no more jobs
   work.reset();
   // now run all pending jobs to completion
   workers.join_all();
-  cout << "SUCCESS learn phase" << endl;
+  cerr << "SUCCESS learn phase" << endl;
 
   model.save(OUT_DIR);
-  cout << "SAVED model" << endl;
+  cerr << "SAVED model" << endl;
 }
 
 void prototype::correct() {
   // load model
-  cout << "LOADING model..." << endl;
+  cerr << "LOADING model..." << endl;
   illum::MultiLightfield model;
   model.load(OUT_DIR);
-  cout << "LOADED model" << endl;
+  cerr << "LOADED model" << endl;
 
   // post all work
   boost::asio::io_service io_service;
@@ -149,7 +155,7 @@ void prototype::correct() {
       double pitch = M_PI * pitch_deg / 180.0;
       double roll = M_PI * roll_deg / 180.0;
       io_service.post(boost::bind(correct_task, &model, inpath, alt, pitch, roll, outpath));
-      cout << "PUSHED " << inpath << endl;
+      cerr << "PUSHED " << inpath << endl;
     }
     count++;
   }
@@ -158,12 +164,12 @@ void prototype::correct() {
   // now run all pending jobs to completion
   workers.join_all();
   // we're done
-  cout << "SUCCESS correct phase" << endl;
+  cerr << "SUCCESS correct phase" << endl;
 }
 
 void prototype::test_effective_resolution() {
   using cv::Mat;
-  using std::cout;
+  using std::cerr;
   using std::endl;
 
   // metrics: pixels
@@ -200,7 +206,7 @@ void prototype::test_effective_resolution() {
     Mat DuD = cv::abs(Du - D);
     double mindiff, maxdiff;
     cv::minMaxLoc(DuD, &mindiff, &maxdiff);
-    cout << k << "x (" << w << ", " << h << "): " << maxdiff << "m" << endl;
+    cerr << k << "x (" << w << ", " << h << "): " << maxdiff << "m" << endl;
     stringstream outpaths;
     string outpath;
     outpaths << "blaz_" << k << ".png";
@@ -209,8 +215,26 @@ void prototype::test_effective_resolution() {
   }
 }
 
-void flat_task(illum::Lightfield* frameAverage, boost::mutex* mutex, string inpath) {
-  cout << "POPPED " << inpath << endl;
+void in_flat_task(illum::Lightfield* frameAverage, boost::mutex* mutex, string inpath) {
+  cerr << "POPPED " << inpath << endl;
+  cv::Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH); // read input image
+  if(cfa_LR.empty()) {
+    return;
+  }
+  // convert to grayscale
+  cv::Mat bgr_LR = demosaic(cfa_LR, "rggb") / 255; // lose the 16-bit bit depth
+  cv::Mat y_LR(bgr_LR.size().height, bgr_LR.size().width, CV_32F);
+  cv::cvtColor(bgr_LR, y_LR, CV_BGR2GRAY);
+  assert(!y_LR.empty());
+  { // protect frame average
+    boost::lock_guard<boost::mutex> lock(*mutex);
+    frameAverage->addImage(y_LR);
+  }
+  cerr << "ADDED " << inpath << endl;
+}
+
+void out_flat_task(illum::Lightfield* frameAverage, boost::mutex* mutex, string inpath) {
+  cerr << "POPPED " << inpath << endl;
   cv::Mat bgr_LR = imread(inpath);
   if(bgr_LR.empty()) {
     return;
@@ -223,12 +247,14 @@ void flat_task(illum::Lightfield* frameAverage, boost::mutex* mutex, string inpa
     boost::lock_guard<boost::mutex> lock(*mutex);
     frameAverage->addImage(y_LR);
   }
-  cout << "ADDED " << inpath << endl;
+  cerr << "ADDED " << inpath << endl;
 }
 
 void prototype::test_flatness() {
-  boost::mutex mutex;
-  illum::Lightfield frameAverage;
+  boost::mutex correctMutex;
+  boost::mutex rawMutex;
+  illum::Lightfield correctAverage;
+  illum::Lightfield rawAverage;
   // post all work
   boost::asio::io_service io_service;
   boost::thread_group workers;
@@ -240,13 +266,21 @@ void prototype::test_flatness() {
   for(int i = 0; i < N_THREADS; i++) {
     workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
   }
-  for(int i = 0; i < 3000; ++i) {
-    std::stringstream inpaths;
-    inpaths << OUT_DIR << "/correct" << i << ".tiff";
-    std::string inpath = inpaths.str();
-    if(access(inpath.c_str(),F_OK) != -1) {
-      io_service.post(boost::bind(flat_task, &frameAverage, &mutex, inpath));
-      cout << "PUSHED " << inpath << endl;
+  // post jobs
+  ifstream inpaths(PATH_FILE);
+  string line;
+  typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
+  vector<string> fields;
+  while(getline(inpaths,line)) { // read pathames from a file
+    Tokenizer tok(line);
+    fields.assign(tok.begin(),tok.end());
+    string inpath = fields.at(0);
+    string outpath = fields.at(1) + ".png";
+    if(access(outpath.c_str(),F_OK) != -1) {
+      io_service.post(boost::bind(in_flat_task, &rawAverage, &rawMutex, inpath));
+      cerr << "PUSHED " << inpath << endl;
+      io_service.post(boost::bind(out_flat_task, &correctAverage, &correctMutex, outpath));
+      cerr << "PUSHED " << outpath << endl;
     }
   }
   // destroy the work object to indicate that there are no more jobs
@@ -254,12 +288,11 @@ void prototype::test_flatness() {
   // now run all pending jobs to completion
   workers.join_all();
 
-  std::cout << "WRITING average" << std::endl;
-  cv::Mat avg = frameAverage.getAverage();
-  imwrite("avg.tiff",avg);
+  std::cerr << "WRITING raw average" << std::endl;
+  cv::Mat avg = rawAverage.getAverage();
+  imwrite("avg_raw.tiff",avg);
 
-  // now compute some stats on the average
-  double minAvg, maxAvg;
-  cv::minMaxLoc(avg, &minAvg, &maxAvg);
-  cout << minAvg << " " << maxAvg << endl;
+  std::cerr << "WRITING correct average" << std::endl;
+  avg = correctAverage.getAverage();
+  imwrite("avg_correct.tiff",avg);
 }

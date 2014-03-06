@@ -154,7 +154,7 @@ void interp::dist_weight(cv::Mat D, cv::OutputArray _dst, double delta, int i) {
     return;
   }
   // if so compute 1 - | D/delta - i |
-  dst = 1 - cv::abs(D/delta - i);
+  dst = 1 - cv::abs(D/delta - i); // FIXME use absdiff
   // set to 0 where < 0
   cv::threshold(dst, dst, 0, 1, cv::THRESH_TOZERO);
 }

@@ -10,7 +10,7 @@ int main(int argc, char **argv) {
     prototype::learn();
   } else if(command=="correct") {
     prototype::correct();
-  } else if(command=="apr") {
+  } else if(command=="res") {
     prototype::test_effective_resolution();
   } else if(command=="flat") {
     prototype::test_flatness();
