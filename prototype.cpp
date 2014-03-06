@@ -49,8 +49,8 @@ void correct_task(MultiLightfield *model, string inpath, double alt, double pitc
   Mat left = Mat(average,Rect(0,0,w/2,h));
   Mat right = Mat(average,Rect(w/2,0,w/2,h));
   // FIXME hardcoded param smoothing kernel size
-  cfa_smooth(left,left,31);
-  cfa_smooth(right,right,31);
+  cfa_smooth(left,left,30); // testing even-to-odd conversion
+  cfa_smooth(right,right,30);
   cerr << "SMOOTHED lightmap" << endl;
   illum::correct(cfa_LR, cfa_LR, average); // correct it
   cerr << "Demosaicing " << inpath << endl;

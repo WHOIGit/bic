@@ -272,12 +272,15 @@ void cfa_channel(InputArray _src, OutputArray _dst, int x, int y) {
 // to quadrant mosaic, smooth each quadrant independently,
 // then convert back to CFA.
 // ksize must be approximately half what it would be for
-// the full-resolution image, and must be odd
+// the full-resolution image, and must be odd. if it is even,
+// it will be incremented by 1.
 void cfa_smooth(InputArray _src, OutputArray _dst, int ksize) {
   Mat src = _src.getMat();
   _dst.create(src.size(), src.type());
   Mat dst = _dst.getMat();
-  assert(ksize % 2 == 1); // kernel size must be odd
+  if(ksize % 2 == 0) { // kernel size must be odd
+    ksize += 1; // so make sure it is.
+  }
   if(dst.empty()) {
     dst.create(src.size(), src.type());
   }
