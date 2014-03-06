@@ -161,53 +161,6 @@ void prototype::correct() {
   cout << "SUCCESS correct phase" << endl;
 }
 
-// test altitude pitch roll code
-void prototype::test_distance_map() {
-  using cv::Mat;
-  using std::cout;
-  using std::endl;
-  double alt = 0.7;
-  double pitch = M_PI * 0 / 180.0;
-  double roll = M_PI * 45 / 180.0;
-  double pixel_sep = 0.0000065;
-  double width = 1360 * pixel_sep;
-  double height = 1024 * pixel_sep;
-  double focal_length = 0.012;
-
-  Mat D = Mat::zeros(1024/4, 1360/4, CV_32F);
-  interp::distance_map(D, alt, pitch, roll, width, height, focal_length);
-
-  double minD, maxD;
-  cv::minMaxLoc(D, &minD, &maxD);
-
-  double delta = 0.1;
-
-  Mat W = Mat::zeros(D.size(), CV_32F);
-  for(int i = 0; i < 12; i++) {
-    interp::dist_weight(D, W, delta, i);
-    if(cv::countNonZero(W) == 0) {
-      cout << i << " is empty" << endl;
-    } else {
-      stringstream outpaths;
-      string outpath;
-      outpaths << "weight_" << i << ".png";
-      imwrite(outpaths.str(), W * 255);
-    }
-  }
-
-  // now generate some products to test that pitch/roll are oriented
-  // correctly
-  // compare D to jrock's algorithm
-  int w = 1360;
-  int h = 1024;
-  cv::Mat Djr = interp::jrock_pitch_roll(alt, pitch, roll, w, h, w, h, focal_length, pixel_sep);
-  double minDjr, maxDjr;
-  cv::minMaxLoc(Djr, &minDjr, &maxDjr);
-
-  imwrite("Djf.png",(D-0.5)*200);
-  imwrite("Djr.png",(Djr-0.5)*200);
-}
-
 void prototype::test_effective_resolution() {
   using cv::Mat;
   using std::cout;
