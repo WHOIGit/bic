@@ -118,19 +118,25 @@ void prototype::learn() {
   typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
   vector<string> fields;
   while(getline(inpaths,line)) { // read pathames from a file
-    Tokenizer tok(line);
-    fields.assign(tok.begin(),tok.end());
-    // FIXME tile
-    int f=0;
-    string inpath = fields.at(f++);
-    string outpath = fields.at(f++);
-    double alt = atof(fields.at(f++).c_str()); // altitude in m
-    double pitch_deg = atof(fields.at(f++).c_str());
-    double roll_deg = atof(fields.at(f++).c_str());
-    double pitch = M_PI * pitch_deg / 180.0;
-    double roll = M_PI * roll_deg / 180.0;
-    io_service.post(boost::bind(learn_task, &model, inpath, alt, pitch, roll));
-    cerr << "PUSHED " << inpath << endl;
+    try {
+      Tokenizer tok(line);
+      fields.assign(tok.begin(),tok.end());
+      // FIXME tile
+      int f=0;
+      string inpath = fields.at(f++);
+      string outpath = fields.at(f++);
+      double alt = atof(fields.at(f++).c_str()); // altitude in m
+      double pitch_deg = atof(fields.at(f++).c_str());
+      double roll_deg = atof(fields.at(f++).c_str());
+      double pitch = M_PI * pitch_deg / 180.0;
+      double roll = M_PI * roll_deg / 180.0;
+      io_service.post(boost::bind(learn_task, &model, inpath, alt, pitch, roll));
+      cerr << "PUSHED " << inpath << endl;
+    } catch(std::runtime_error const &e) {
+      cerr << "ERROR parsing input metadata: " << e.what() << endl;
+    } catch(std::exception) {
+      cerr << "ERROR parsing input metadata" << endl;
+    }
   }
   // destroy the work object to indicate that there are no more jobs
   work.reset();
@@ -167,18 +173,24 @@ void prototype::correct() {
   typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
   vector<string> fields;
   while(getline(inpaths,line)) { // read pathames from a file
-    Tokenizer tok(line);
-    fields.assign(tok.begin(),tok.end());
-    int f=0;
-    string inpath = fields.at(f++);
-    string outpath = fields.at(f++);
-    double alt = atof(fields.at(f++).c_str()); // altitude in m
-    double pitch_deg = atof(fields.at(f++).c_str());
-    double roll_deg = atof(fields.at(f++).c_str());
-    double pitch = M_PI * pitch_deg / 180.0;
-    double roll = M_PI * roll_deg / 180.0;
-    io_service.post(boost::bind(correct_task, &model, inpath, alt, pitch, roll, outpath));
-    cerr << "PUSHED " << inpath << endl;
+    try {
+      Tokenizer tok(line);
+      fields.assign(tok.begin(),tok.end());
+      int f=0;
+      string inpath = fields.at(f++);
+      string outpath = fields.at(f++);
+      double alt = atof(fields.at(f++).c_str()); // altitude in m
+      double pitch_deg = atof(fields.at(f++).c_str());
+      double roll_deg = atof(fields.at(f++).c_str());
+      double pitch = M_PI * pitch_deg / 180.0;
+      double roll = M_PI * roll_deg / 180.0;
+      io_service.post(boost::bind(correct_task, &model, inpath, alt, pitch, roll, outpath));
+      cerr << "PUSHED " << inpath << endl;
+    } catch(std::runtime_error const &e) {
+      cerr << "ERROR parsing input metadata: " << e.what() << endl;
+    } catch(std::exception) {
+      cerr << "ERROR parsing input metadata" << endl;
+    }
   }
   // destroy the work object to indicate that there are no more jobs
   work.reset();
