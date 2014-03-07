@@ -1,8 +1,10 @@
 #include <iostream>
 #include <string>
 #include <fstream>
+#include <ios>
 #include <opencv2/opencv.hpp>
 #include <boost/thread.hpp>
+#include <boost/format.hpp>
 #include <boost/asio.hpp>
 #include <boost/tokenizer.hpp>
 
@@ -27,18 +29,20 @@ using illum::MultiLightfield;
 
 // the learn task adds an image to a multilightfield model
 void learn_task(MultiLightfield *model, string inpath, double alt, double pitch, double roll) {
+  using boost::format;
+  cerr << nounitbuf;
   // get the input pathname
   try  {
-    cerr << "POPPED " << inpath << " " << alt << "," << pitch << "," << roll << endl;
+    cerr << format("POPPED %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll << endl;
     // read the image (this can be done in parallel)
     Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
     if(!cfa_LR.data)
       throw std::runtime_error("unable to read image file");
     if(cfa_LR.type() != CV_16U)
       throw std::runtime_error("image is not 16-bit grayscale");
-    cerr << "Read " << inpath << endl;
+    cerr << format("READ %s") % inpath << endl;
     model->addImage(cfa_LR, alt, pitch, roll);
-    cerr << "Added " << inpath << endl;
+    cerr << format("ADDED %s") % inpath << endl;
   } catch(std::runtime_error const &e) {
     cerr << "ERROR learning " << inpath << ": " << e.what() << endl;
   } catch(std::exception) {
@@ -48,8 +52,10 @@ void learn_task(MultiLightfield *model, string inpath, double alt, double pitch,
 
 // the correct task corrects images
 void correct_task(MultiLightfield *model, string inpath, double alt, double pitch, double roll, string outpath) {
+  using boost::format;
+  cerr << nounitbuf;
   try {
-    cerr << "POPPED " << inpath << " " << alt << "," << pitch << "," << roll << endl;
+    cerr << format("POPPED %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll << endl;
     Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH); // read input image
     if(!cfa_LR.data)
       throw std::runtime_error("no image data");
@@ -68,7 +74,7 @@ void correct_task(MultiLightfield *model, string inpath, double alt, double pitc
     cfa_smooth(right,right,30);
     cerr << "SMOOTHED lightmap" << endl;
     illum::correct(cfa_LR, cfa_LR, average); // correct it
-    cerr << "Demosaicing " << inpath << endl;
+    cerr << format("DEMOSAICING %s") % inpath << endl;
     // FIXME hardcoded param bayer pattern
     Mat rgb_LR = demosaic(cfa_LR,BAYER_PATTERN); // demosaic it
     /*stringstream outpath_exts;
@@ -76,7 +82,7 @@ void correct_task(MultiLightfield *model, string inpath, double alt, double pitc
       outpath_exts << outpath << ".png";
       outpath_ext = outpath_exts.str();*/
     outpath = outpath + ".png";
-    cerr << "Saving RGB to " << outpath << endl;
+    cerr << format("SAVE RGB to %s") % outpath << endl;
     // FIXME hardcoded brightness parameters
     double max = 0.7;
     double min = 0.05;
@@ -95,10 +101,23 @@ void correct_task(MultiLightfield *model, string inpath, double alt, double pitc
   }
 }
 
+void validate_params(double alt, double pitch_deg, double roll_deg) {
+  using boost::format;
+  if(alt < 0 || alt > 8) // FIXME arbitrary threshold
+    throw std::runtime_error(str(format("ERROR altitude out of range: %.2f") % alt));
+  else if(pitch_deg < -45 || pitch_deg > 45)
+    throw std::runtime_error(str(format("ERROR pitch out of range: %.2f") % pitch_deg));
+  else if(roll_deg < -45 || roll_deg > 45)
+    throw std::runtime_error(str(format("ERROR roll out of range: %.2f") % roll_deg));
+}
+
 // learn phase
 void prototype::learn() {
   // before any OpenCV operations are done, set global error flag
   cv::setBreakOnError(true);
+  // ersatz logging setup
+  using boost::format;
+  cerr << nounitbuf;
   // construct an empty lightfield model
   illum::MultiLightfield model;
   // post all work
@@ -128,12 +147,13 @@ void prototype::learn() {
       double alt = atof(fields.at(f++).c_str()); // altitude in m
       double pitch_deg = atof(fields.at(f++).c_str());
       double roll_deg = atof(fields.at(f++).c_str());
+      validate_params(alt, pitch_deg, roll_deg);
       double pitch = M_PI * pitch_deg / 180.0;
       double roll = M_PI * roll_deg / 180.0;
       io_service.post(boost::bind(learn_task, &model, inpath, alt, pitch, roll));
-      cerr << "PUSHED " << inpath << endl;
+      cerr << format("PUSHED LEARN %s") % inpath << endl;
     } catch(std::runtime_error const &e) {
-      cerr << "ERROR parsing input metadata: " << e.what() << endl;
+      cerr << format("ERROR parsing input metadata: %s") % e.what() << endl;
     } catch(std::exception) {
       cerr << "ERROR parsing input metadata" << endl;
     }
@@ -151,6 +171,8 @@ void prototype::learn() {
 void prototype::correct() {
   // before any OpenCV operations are done, set global error flag
   cv::setBreakOnError(true);
+  using boost::format;
+  cerr << nounitbuf;
   // load model
   cerr << "LOADING model..." << endl;
   illum::MultiLightfield model;
@@ -182,12 +204,13 @@ void prototype::correct() {
       double alt = atof(fields.at(f++).c_str()); // altitude in m
       double pitch_deg = atof(fields.at(f++).c_str());
       double roll_deg = atof(fields.at(f++).c_str());
+      validate_params(alt, pitch_deg, roll_deg);
       double pitch = M_PI * pitch_deg / 180.0;
       double roll = M_PI * roll_deg / 180.0;
       io_service.post(boost::bind(correct_task, &model, inpath, alt, pitch, roll, outpath));
-      cerr << "PUSHED " << inpath << endl;
+      cerr << format("PUSHED CORRECT %s") % inpath << endl;
     } catch(std::runtime_error const &e) {
-      cerr << "ERROR parsing input metadata: " << e.what() << endl;
+      cerr << format("ERROR parsing input metadata: %s") % e.what() << endl;
     } catch(std::exception) {
       cerr << "ERROR parsing input metadata" << endl;
     }
