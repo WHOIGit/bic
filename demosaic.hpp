@@ -89,3 +89,4 @@ void cfa_channel(cv::InputArray src, cv::OutputArray dst, int x=0, int y=0);
  * @param dst the output image
  */
 void cfa_smooth(cv::InputArray src, cv::OutputArray dst, int ksize);
+

@@ -1,9 +1,11 @@
-
 #pragma once
 #include <exception>
+#include <stdexcept>
 #include <fstream>
 #include <boost/thread.hpp>
 #include <opencv2/opencv.hpp>
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 
 #include "interpolation.hpp"
 
@@ -46,7 +48,8 @@ class illum::Lightfield {
   Mat count; // running count (fractional)
   // lazy initialization based on size of first image
   void init(Mat image) {
-    assert(!image.empty());
+    if(image.empty())
+      throw std::runtime_error("cannot initialize lightmap with empty image");
     if(empty()) {
       int h = image.size().height;
       int w = image.size().width;
@@ -56,8 +59,8 @@ class illum::Lightfield {
   }
   void validate(Mat image) {
     init(image);
-    assert(image.size().height == sum.size().height);
-    assert(image.size().width == sum.size().width);
+    if(image.size() != sum.size())
+      throw std::runtime_error("input image not the same size as lightfield");
   }
 public:
   Lightfield() { }
@@ -76,8 +79,8 @@ public:
    */
   void addImage(Mat image, Mat alpha) {
     validate(image);
-    assert(image.size().height == alpha.size().height);
-    assert(image.size().width == alpha.size().width);
+    if(image.size() != alpha.size())
+      throw std::runtime_error("alpha channel not the same size as image");
     Mat image32f;
     image.convertTo(image32f, CV_32F); // convert to floating point
     sum += image32f.mul(alpha); // multiply by alpha and add to sum image
@@ -108,7 +111,8 @@ public:
     Mat avg = getAverage();
     _dst.create(avg.size(), avg.type());
     Mat dst = _dst.getMat();
-    assert(dst.type()==CV_32F);
+    if(dst.type() != CV_32F)
+      throw std::runtime_error("output image must be 32-bit floating point");
     getAverage().copyTo(dst);
   }
   /**
@@ -118,7 +122,8 @@ public:
    * added
    */
   Mat getAverage() {
-    assert(!empty());
+    if(empty())
+      throw std::runtime_error("average requested before any images were added");
     // average image is just sum image divided by count image
     return sum / count;
   }
@@ -132,7 +137,11 @@ public:
    */
   void save(string pathname) {
     using cv::Rect;
-    // FIXME assert that the path ends ".tif" or equiv
+    using boost::algorithm::ends_with;
+    string lp = pathname;
+    boost::to_lower(lp);
+    if(!(ends_with(lp,".tif") || ends_with(lp,".tiff")))
+      throw std::runtime_error("lightfield output pathname does not end with .tif or .tiff");
     Mat average = getAverage();
     // create a composite image twice the height of the frame
     Mat composite;
@@ -157,7 +166,8 @@ public:
     using cv::Rect;
     // load the 16-bit unsigned checkpoint image
     Mat composite_16u = cv::imread(pathname, CV_LOAD_IMAGE_ANYDEPTH);
-    assert(composite_16u.type() == CV_16U);
+    if(composite_16u.type() != CV_16U)
+      throw std::runtime_error("lightfield image file must be 16-bit unsigned");
     int h = composite_16u.size().height / 2;
     int w = composite_16u.size().width;
     // convert to floating point

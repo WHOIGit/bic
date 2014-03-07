@@ -1,5 +1,6 @@
 #include <opencv2/opencv.hpp>
 #include <boost/algorithm/string.hpp>
+#include <stdexcept>
 #include "demosaic.hpp"
 
 using namespace cv;
@@ -188,8 +189,10 @@ void cfa_quad(InputArray _src, OutputArray _dst) {
   Mat src = _src.getMat();
   _dst.create(src.size(), src.type());
   Mat dst = _dst.getMat();
-  assert(dst.size()==src.size());
-  assert(dst.type()==src.type());
+  if(dst.size() != src.size())
+    throw std::runtime_error("input/output image size mismatch");
+  if(dst.type() != src.type())
+    throw std::runtime_error("input/output image type mismatch");
   Mat xMap, yMap;
   xMap.create(src.size(), CV_32F);
   yMap.create(src.size(), CV_32F);
@@ -219,8 +222,10 @@ void quad_cfa(InputArray _src, OutputArray _dst) {
   Mat src = _src.getMat();
   _dst.create(src.size(), src.type());
   Mat dst = _dst.getMat();
-  assert(dst.size()==src.size());
-  assert(dst.type()==src.type());
+  if(dst.size() != src.size())
+    throw std::runtime_error("input/output image size mismatch");
+  if(dst.type() != src.type())
+    throw std::runtime_error("input/output image type mismatch");
   Mat xMap, yMap;
   xMap.create(src.size(), CV_32F);
   yMap.create(src.size(), CV_32F);
@@ -252,14 +257,15 @@ void cfa_channel(InputArray _src, OutputArray _dst, int x, int y) {
   Mat src = _src.getMat();
   _dst.create(src.rows/2, src.cols/2, src.type());
   Mat dst = _dst.getMat();
-  assert(x==0 || x==1);
-  assert(y==0 || y==1);
-  assert(dst.type()==src.type());
+  if(x<0 || x>1 || y<0 || y>1)
+    throw std::runtime_error("image quadrant coordinate(s) out of range");
+  if(dst.type() != src.type())
+    throw std::runtime_error("input/output image type mismatch");
   // dst must be half-sized
   int w2 = src.cols/2;
   int h2 = src.rows/2;
-  assert(dst.cols==w2);
-  assert(dst.rows==h2);
+  if(dst.cols!=w2 || dst.rows!=h2)
+    throw std::runtime_error("output image must be half the size of input image");
   // create mosaic of channel quadrants
   Mat quad(src.size(), src.type());
   cfa_quad(src,quad);
@@ -284,8 +290,10 @@ void cfa_smooth(InputArray _src, OutputArray _dst, int ksize) {
   if(dst.empty()) {
     dst.create(src.size(), src.type());
   }
-  assert(dst.size()==src.size());
-  assert(dst.type()==src.type());
+  if(dst.size() != src.size())
+    throw std::runtime_error("input/output image size mismatch");
+  if(dst.type() != src.type())
+    throw std::runtime_error("input/output image type mismatch");
   // compute sigma from ksize using standard formula
   double sigma = 0.3*((ksize-1)*0.5 - 1) + 0.8;
   cfa_quad(src,dst); // split into quads

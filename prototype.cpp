@@ -98,6 +98,7 @@ void prototype::learn() {
   while(getline(inpaths,line)) { // read pathames from a file
     Tokenizer tok(line);
     fields.assign(tok.begin(),tok.end());
+    // FIXME tile
     int f=0;
     string inpath = fields.at(f++);
     string outpath = fields.at(f++);
@@ -143,7 +144,7 @@ void prototype::correct() {
   vector<string> fields;
   int count = 0;
   while(getline(inpaths,line)) { // read pathames from a file
-    if(count % 5 == 0) {
+    if(count % 5 == 0) { // FIXME this only does every 5 images
       Tokenizer tok(line);
       fields.assign(tok.begin(),tok.end());
       int f=0;
@@ -222,10 +223,12 @@ void in_flat_task(illum::Lightfield* frameAverage, boost::mutex* mutex, string i
     return;
   }
   // convert to grayscale
+  // FIXME hardcoded bayer pattern
   cv::Mat bgr_LR = demosaic(cfa_LR, "rggb") / 255; // lose the 16-bit bit depth
   cv::Mat y_LR(bgr_LR.size().height, bgr_LR.size().width, CV_32F);
   cv::cvtColor(bgr_LR, y_LR, CV_BGR2GRAY);
-  assert(!y_LR.empty());
+  if(y_LR.empty())
+    throw std::runtime_error("grayscale conversion produced empty image");
   { // protect frame average
     boost::lock_guard<boost::mutex> lock(*mutex);
     frameAverage->addImage(y_LR);
@@ -242,7 +245,8 @@ void out_flat_task(illum::Lightfield* frameAverage, boost::mutex* mutex, string 
   // convert to grayscale
   cv::Mat y_LR(bgr_LR.size().height, bgr_LR.size().width, CV_32F);
   cv::cvtColor(bgr_LR, y_LR, CV_BGR2GRAY);
-  assert(!y_LR.empty());
+  if(y_LR.empty())
+    throw std::runtime_error("grayscale conversion produced empty image");
   { // protect frame average
     boost::lock_guard<boost::mutex> lock(*mutex);
     frameAverage->addImage(y_LR);
