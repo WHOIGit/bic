@@ -34,6 +34,8 @@ void learn_task(MultiLightfield *model, string inpath, double alt, double pitch,
     Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
     if(!cfa_LR.data)
       throw std::runtime_error("unable to read image file");
+    if(cfa_LR.type() != CV_16U)
+      throw std::runtime_error("image is not 16-bit grayscale");
     cerr << "Read " << inpath << endl;
     model->addImage(cfa_LR, alt, pitch, roll);
     cerr << "Added " << inpath << endl;
@@ -51,6 +53,8 @@ void correct_task(MultiLightfield *model, string inpath, double alt, double pitc
     Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH); // read input image
     if(!cfa_LR.data)
       throw std::runtime_error("no image data");
+    if(cfa_LR.type() != CV_16U)
+      throw std::runtime_error("image is not 16-bit grayscale");
     // get the average
     Mat average = Mat::zeros(cfa_LR.size(), CV_32F);
     model->getAverage(average, alt, pitch, roll);
