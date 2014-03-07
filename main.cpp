@@ -1,4 +1,5 @@
 #include <string>
+#include <opencv2/opencv.hpp>
 #include "stereo.hpp"
 #include "prototype.hpp"
 

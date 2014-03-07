@@ -28,55 +28,73 @@ using illum::MultiLightfield;
 // the learn task adds an image to a multilightfield model
 void learn_task(MultiLightfield *model, string inpath, double alt, double pitch, double roll) {
   // get the input pathname
-  cerr << "POPPED " << inpath << " " << alt << "," << pitch << "," << roll << endl;
-  // read the image (this can be done in parallel)
-  Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
-  cerr << "Read " << inpath << endl;
-  model->addImage(cfa_LR, alt, pitch, roll);
-  cerr << "Added " << inpath << endl;
+  try  {
+    cerr << "POPPED " << inpath << " " << alt << "," << pitch << "," << roll << endl;
+    // read the image (this can be done in parallel)
+    Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
+    if(!cfa_LR.data)
+      throw std::runtime_error("unable to read image file");
+    cerr << "Read " << inpath << endl;
+    model->addImage(cfa_LR, alt, pitch, roll);
+    cerr << "Added " << inpath << endl;
+  } catch(std::runtime_error const &e) {
+    cerr << "ERROR learning " << inpath << ": " << e.what() << endl;
+  } catch(std::exception) {
+    cerr << "ERROR learning " << inpath << endl;
+  }
 }
 
 // the correct task corrects images
 void correct_task(MultiLightfield *model, string inpath, double alt, double pitch, double roll, string outpath) {
-  cerr << "POPPED " << inpath << " " << alt << "," << pitch << "," << roll << endl;
-  Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH); // read input image
-  // get the average
-  Mat average = Mat::zeros(cfa_LR.size(), CV_32F);
-  model->getAverage(average, alt, pitch, roll);
-  // now smooth the average
-  int h = average.size().height;
-  int w = average.size().width;
-  Mat left = Mat(average,Rect(0,0,w/2,h));
-  Mat right = Mat(average,Rect(w/2,0,w/2,h));
-  // FIXME hardcoded param smoothing kernel size
-  cfa_smooth(left,left,30); // testing even-to-odd conversion
-  cfa_smooth(right,right,30);
-  cerr << "SMOOTHED lightmap" << endl;
-  illum::correct(cfa_LR, cfa_LR, average); // correct it
-  cerr << "Demosaicing " << inpath << endl;
-  // FIXME hardcoded param bayer pattern
-  Mat rgb_LR = demosaic(cfa_LR,BAYER_PATTERN); // demosaic it
-  /*stringstream outpath_exts;
-  string outpath_ext;
-  outpath_exts << outpath << ".png";
-  outpath_ext = outpath_exts.str();*/
-  outpath = outpath + ".png";
-  cerr << "Saving RGB to " << outpath << endl;
-  // FIXME hardcoded brightness parameters
-  double max = 0.7;
-  double min = 0.05;
-  // scale brightness
-  //rgb_LR /= max - min;
-  //rgb_LR += min;
-  // save as 8-bit png
-  Mat rgb_LR_8u;
-  rgb_LR = rgb_LR * (255.0 / (65535.0 * (max - min))) - (min * 255.0);
-  rgb_LR.convertTo(rgb_LR_8u, CV_8U);
-  imwrite(outpath, rgb_LR_8u);
+  try {
+    cerr << "POPPED " << inpath << " " << alt << "," << pitch << "," << roll << endl;
+    Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH); // read input image
+    if(!cfa_LR.data)
+      throw std::runtime_error("no image data");
+    // get the average
+    Mat average = Mat::zeros(cfa_LR.size(), CV_32F);
+    model->getAverage(average, alt, pitch, roll);
+    // now smooth the average
+    int h = average.size().height;
+    int w = average.size().width;
+    Mat left = Mat(average,Rect(0,0,w/2,h));
+    Mat right = Mat(average,Rect(w/2,0,w/2,h));
+    // FIXME hardcoded param smoothing kernel size
+    cfa_smooth(left,left,30); // testing even-to-odd conversion
+    cfa_smooth(right,right,30);
+    cerr << "SMOOTHED lightmap" << endl;
+    illum::correct(cfa_LR, cfa_LR, average); // correct it
+    cerr << "Demosaicing " << inpath << endl;
+    // FIXME hardcoded param bayer pattern
+    Mat rgb_LR = demosaic(cfa_LR,BAYER_PATTERN); // demosaic it
+    /*stringstream outpath_exts;
+      string outpath_ext;
+      outpath_exts << outpath << ".png";
+      outpath_ext = outpath_exts.str();*/
+    outpath = outpath + ".png";
+    cerr << "Saving RGB to " << outpath << endl;
+    // FIXME hardcoded brightness parameters
+    double max = 0.7;
+    double min = 0.05;
+    // scale brightness
+    //rgb_LR /= max - min;
+    //rgb_LR += min;
+    // save as 8-bit png
+    Mat rgb_LR_8u;
+    rgb_LR = rgb_LR * (255.0 / (65535.0 * (max - min))) - (min * 255.0);
+    rgb_LR.convertTo(rgb_LR_8u, CV_8U);
+    imwrite(outpath, rgb_LR_8u);
+  } catch(std::runtime_error const &e) {
+    cerr << "ERROR correcting " << inpath << ": " << e.what() << endl;
+  } catch(std::exception) {
+    cerr << "ERROR correcting " << inpath << endl;
+  }
 }
 
 // learn phase
 void prototype::learn() {
+  // before any OpenCV operations are done, set global error flag
+  cv::setBreakOnError(true);
   // construct an empty lightfield model
   illum::MultiLightfield model;
   // post all work
@@ -121,6 +139,8 @@ void prototype::learn() {
 }
 
 void prototype::correct() {
+  // before any OpenCV operations are done, set global error flag
+  cv::setBreakOnError(true);
   // load model
   cerr << "LOADING model..." << endl;
   illum::MultiLightfield model;
@@ -142,23 +162,19 @@ void prototype::correct() {
   string line;
   typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
   vector<string> fields;
-  int count = 0;
   while(getline(inpaths,line)) { // read pathames from a file
-    if(count % 5 == 0) { // FIXME this only does every 5 images
-      Tokenizer tok(line);
-      fields.assign(tok.begin(),tok.end());
-      int f=0;
-      string inpath = fields.at(f++);
-      string outpath = fields.at(f++);
-      double alt = atof(fields.at(f++).c_str()); // altitude in m
-      double pitch_deg = atof(fields.at(f++).c_str());
-      double roll_deg = atof(fields.at(f++).c_str());
-      double pitch = M_PI * pitch_deg / 180.0;
-      double roll = M_PI * roll_deg / 180.0;
-      io_service.post(boost::bind(correct_task, &model, inpath, alt, pitch, roll, outpath));
-      cerr << "PUSHED " << inpath << endl;
-    }
-    count++;
+    Tokenizer tok(line);
+    fields.assign(tok.begin(),tok.end());
+    int f=0;
+    string inpath = fields.at(f++);
+    string outpath = fields.at(f++);
+    double alt = atof(fields.at(f++).c_str()); // altitude in m
+    double pitch_deg = atof(fields.at(f++).c_str());
+    double roll_deg = atof(fields.at(f++).c_str());
+    double pitch = M_PI * pitch_deg / 180.0;
+    double roll = M_PI * roll_deg / 180.0;
+    io_service.post(boost::bind(correct_task, &model, inpath, alt, pitch, roll, outpath));
+    cerr << "PUSHED " << inpath << endl;
   }
   // destroy the work object to indicate that there are no more jobs
   work.reset();

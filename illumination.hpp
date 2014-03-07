@@ -166,6 +166,8 @@ public:
     using cv::Rect;
     // load the 16-bit unsigned checkpoint image
     Mat composite_16u = cv::imread(pathname, CV_LOAD_IMAGE_ANYDEPTH);
+    if(!composite_16u.data)
+      throw std::runtime_error("unable to read lightmap image file");
     if(composite_16u.type() != CV_16U)
       throw std::runtime_error("lightfield image file must be 16-bit unsigned");
     int h = composite_16u.size().height / 2;
