@@ -14,7 +14,7 @@
 #include "stereo.hpp"
 #include "demosaic.hpp"
 
-#define N_THREADS 12
+#define N_THREADS 12 // FIXME hardcoded thread count
 
 int stereo::align(cv::Mat y_LR_in, int template_size) {
   using namespace std;
@@ -91,7 +91,7 @@ void convert_task(std::string line) {
   green /= 255;
   Mat green_8u;
   green.convertTo(green_8u,CV_8U);
-  boost::regex re2("FNAME");
+  boost::regex re2("FNAME"); // FIXME use boost::format
   string fgreen = regex_replace(string("xoff_testset/FNAME.png"),re2,fname);
   imwrite(fgreen,green_8u);
   cout << fname << ".png," << offset / 2 << endl;
@@ -123,7 +123,7 @@ void stereo::xoff_test(int argc, char **argv) {
     io_service.post(boost::bind(align_task, line));
   }
   boost::thread_group workers; // workers
-  for(int i = 0; i < N_THREADS; ++i) {
+  for(int i = 0; i < N_THREADS; ++i) { // FIXME hardcoded thread count
     workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
   }
   while(getline(inpaths,line)) { // read pathames from a file

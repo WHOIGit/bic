@@ -1,9 +1,12 @@
 #include <string>
+#include <boost/program_options.hpp>
 #include <opencv2/opencv.hpp>
 #include "stereo.hpp"
 #include "prototype.hpp"
 
 using namespace std;
+
+namespace po = boost::program_options;
 
 int main(int argc, char **argv) {
   string command = string(argv[1]);

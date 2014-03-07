@@ -20,12 +20,13 @@ using illum::MultiLightfield;
 
 // this is a prototype application; code is not in reusable state yet
 
-// hardcoded input and output parameters
-#define PATH_FILE "aprs.csv"
-#define MODEL_FILE "model.tiff"
-#define BAYER_PATTERN "rggb"
-#define OUT_DIR "out"
-#define N_THREADS 12
+#define PATH_FILE "aprs.csv" // FIXME hardcoded CSV file path
+#define BAYER_PATTERN "rggb" // FIXME hardcoded bayer pattern
+#define OUT_DIR "out" // FIXME hardcoded model/output directory
+#define N_THREADS 12 // FIXME hardcoded thread count
+#define ALT_SPACING_M 0.1 // FIXME hardcoded altitude bin spacing
+#define FOCAL_LENGTH_M 0.012 // FIXME hardcoded focal length
+#define PIXEL_SEP_M 0.0000065 // FIXME hardcoded pixel separation
 
 // the learn task adds an image to a multilightfield model
 void learn_task(MultiLightfield *model, string inpath, double alt, double pitch, double roll) {
@@ -69,27 +70,22 @@ void correct_task(MultiLightfield *model, string inpath, double alt, double pitc
     int w = average.size().width;
     Mat left = Mat(average,Rect(0,0,w/2,h));
     Mat right = Mat(average,Rect(w/2,0,w/2,h));
-    // FIXME hardcoded param smoothing kernel size
-    cfa_smooth(left,left,30); // testing even-to-odd conversion
+    cfa_smooth(left,left,30); // FIXME hardcoded smoothing kernel size
     cfa_smooth(right,right,30);
     cerr << "SMOOTHED lightmap" << endl;
     illum::correct(cfa_LR, cfa_LR, average); // correct it
     cerr << format("DEMOSAICING %s") % inpath << endl;
-    // FIXME hardcoded param bayer pattern
-    Mat rgb_LR = demosaic(cfa_LR,BAYER_PATTERN); // demosaic it
+    // demosaic it
+    Mat rgb_LR = demosaic(cfa_LR,BAYER_PATTERN); // FIXME hardcoded param bayer pattern
     /*stringstream outpath_exts;
       string outpath_ext;
       outpath_exts << outpath << ".png";
       outpath_ext = outpath_exts.str();*/
     outpath = outpath + ".png";
     cerr << format("SAVE RGB to %s") % outpath << endl;
-    // FIXME hardcoded brightness parameters
-    double max = 0.7;
-    double min = 0.05;
-    // scale brightness
-    //rgb_LR /= max - min;
-    //rgb_LR += min;
-    // save as 8-bit png
+    double max = 0.7; // FIXME hardcoded max brightness
+    double min = 0.05; // FIXME hardcoded min brightness
+    // scale brightness and save as 8-bit png
     Mat rgb_LR_8u;
     rgb_LR = rgb_LR * (255.0 / (65535.0 * (max - min))) - (min * 255.0);
     rgb_LR.convertTo(rgb_LR_8u, CV_8U);
@@ -103,11 +99,11 @@ void correct_task(MultiLightfield *model, string inpath, double alt, double pitc
 
 void validate_params(double alt, double pitch_deg, double roll_deg) {
   using boost::format;
-  if(alt < 0 || alt > 8) // FIXME arbitrary threshold
+  if(alt < 0 || alt > 8) // FIXME hardcoded
     throw std::runtime_error(str(format("ERROR altitude out of range: %.2f") % alt));
-  else if(pitch_deg < -45 || pitch_deg > 45)
+  else if(pitch_deg < -45 || pitch_deg > 45) // FIXME hardcoded
     throw std::runtime_error(str(format("ERROR pitch out of range: %.2f") % pitch_deg));
-  else if(roll_deg < -45 || roll_deg > 45)
+  else if(roll_deg < -45 || roll_deg > 45) // FIXME hardcoded
     throw std::runtime_error(str(format("ERROR roll out of range: %.2f") % roll_deg));
 }
 
@@ -119,7 +115,7 @@ void prototype::learn() {
   using boost::format;
   cerr << nounitbuf;
   // construct an empty lightfield model
-  illum::MultiLightfield model;
+  illum::MultiLightfield model(ALT_SPACING_M, FOCAL_LENGTH_M, PIXEL_SEP_M); // FIXME hardcoded altitude bin spacing and camera params
   // post all work
   boost::asio::io_service io_service;
   boost::thread_group workers;
@@ -128,11 +124,11 @@ void prototype::learn() {
   // use auto_ptr so we can indicate that no more jobs will be posted
   auto_ptr<boost::asio::io_service::work> work(new boost::asio::io_service::work(io_service));
   // create the thread pool
-  for(int i = 0; i < N_THREADS; i++) {
+  for(int i = 0; i < N_THREADS; i++) { // FIXME hardcoded thread count
     workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
   }
   // now read input lines and post jobs
-  ifstream inpaths(PATH_FILE);
+  ifstream inpaths(PATH_FILE); // FIXME hardcoded CSV file pathname
   string line;
   typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
   vector<string> fields;
@@ -164,7 +160,7 @@ void prototype::learn() {
   workers.join_all();
   cerr << "SUCCESS learn phase" << endl;
 
-  model.save(OUT_DIR);
+  model.save(OUT_DIR); // FIXME hardcoded model/output directory
   cerr << "SAVED model" << endl;
 }
 
@@ -176,7 +172,7 @@ void prototype::correct() {
   // load model
   cerr << "LOADING model..." << endl;
   illum::MultiLightfield model;
-  model.load(OUT_DIR);
+  model.load(OUT_DIR); // FIXME hardcoded model/output directory
   cerr << "LOADED model" << endl;
 
   // post all work
@@ -186,11 +182,11 @@ void prototype::correct() {
   auto_ptr<boost::asio::io_service::work> work(new boost::asio::io_service::work(io_service));
   // start a thread pool
   boost::thread_group workers;
-  for(int i = 0; i < N_THREADS; i++) {
+  for(int i = 0; i < N_THREADS; i++) { // FIXME hardcoded thread count
     workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
   }
   // post jobs
-  ifstream inpaths(PATH_FILE);
+  ifstream inpaths(PATH_FILE);  // FIXME hardcoded CSV file pathname
   string line;
   typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
   vector<string> fields;
@@ -326,7 +322,7 @@ void prototype::test_flatness() {
     workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
   }
   // post jobs
-  ifstream inpaths(PATH_FILE);
+  ifstream inpaths(PATH_FILE); // FIXME hardcoded CSV file pathname
   string line;
   typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
   vector<string> fields;
