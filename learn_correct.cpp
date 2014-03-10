@@ -19,15 +19,45 @@ using namespace cv;
 
 using illum::MultiLightfield;
 
-// this is a prototype application; code is not in reusable state yet
-
-#define PATH_FILE "aprs.csv" // FIXME hardcoded CSV file path
-#define BAYER_PATTERN "rggb" // FIXME hardcoded bayer pattern
-#define OUT_DIR "out" // FIXME hardcoded model/output directory
-#define N_THREADS 12 // FIXME hardcoded thread count
-#define ALT_SPACING_M 0.1 // FIXME hardcoded altitude bin spacing
-#define FOCAL_LENGTH_M 0.012 // FIXME hardcoded focal length
-#define PIXEL_SEP_M 0.0000065 // FIXME hardcoded pixel separation
+// parameters necessary for each job
+class Params {
+  typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
+  void config(vector<string> fields) {
+    int f=0;
+    inpath = fields.at(f++);
+    outpath = fields.at(f++);
+    alt = atof(fields.at(f++).c_str()); // altitude in m
+    double pitch_deg = atof(fields.at(f++).c_str());
+    double roll_deg = atof(fields.at(f++).c_str());
+    pitch = M_PI * pitch_deg / 180.0;
+    roll = M_PI * roll_deg / 180.0;
+  }
+public:
+  string inpath;
+  string outpath;
+  double alt;
+  double pitch;
+  double roll;
+  Params(vector<string> fields) {
+    config(fields);
+  }
+  Params(string line) {
+    vector<string> fields;
+    Tokenizer tok(line);
+    fields.assign(tok.begin(),tok.end());
+    config(fields);
+  }
+  void validate() {
+    using boost::format;
+    const double extreme_angle = M_PI * 45.0 / 180.0; // FIXME hardcoded
+    if(alt < 0 || alt > 8) // FIXME hardcoded
+      throw std::runtime_error(str(format("ERROR altitude out of range: %.2f (meters)") % alt));
+    else if(pitch < -extreme_angle || pitch > extreme_angle)
+      throw std::runtime_error(str(format("ERROR pitch out of range: %.2f (radians)") % pitch));
+    else if(roll < -extreme_angle || roll > extreme_angle) // FIXME hardcoded
+      throw std::runtime_error(str(format("ERROR roll out of range: %.2f (radians)") % roll));
+  }
+};
 
 // the learn task adds an image to a multilightfield model
 void learn_task(MultiLightfield *model, string inpath, double alt, double pitch, double roll) {
@@ -98,16 +128,6 @@ void correct_task(MultiLightfield *model, string inpath, double alt, double pitc
   }
 }
 
-void validate_params(double alt, double pitch_deg, double roll_deg) {
-  using boost::format;
-  if(alt < 0 || alt > 8) // FIXME hardcoded
-    throw std::runtime_error(str(format("ERROR altitude out of range: %.2f") % alt));
-  else if(pitch_deg < -45 || pitch_deg > 45) // FIXME hardcoded
-    throw std::runtime_error(str(format("ERROR pitch out of range: %.2f") % pitch_deg));
-  else if(roll_deg < -45 || roll_deg > 45) // FIXME hardcoded
-    throw std::runtime_error(str(format("ERROR roll out of range: %.2f") % roll_deg));
-}
-
 // learn phase
 void learn_correct::learn() {
   // before any OpenCV operations are done, set global error flag
@@ -131,24 +151,12 @@ void learn_correct::learn() {
   // now read input lines and post jobs
   ifstream inpaths(PATH_FILE); // FIXME hardcoded CSV file pathname
   string line;
-  typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
-  vector<string> fields;
   while(getline(inpaths,line)) { // read pathames from a file
     try {
-      Tokenizer tok(line);
-      fields.assign(tok.begin(),tok.end());
-      // FIXME tile
-      int f=0;
-      string inpath = fields.at(f++);
-      string outpath = fields.at(f++);
-      double alt = atof(fields.at(f++).c_str()); // altitude in m
-      double pitch_deg = atof(fields.at(f++).c_str());
-      double roll_deg = atof(fields.at(f++).c_str());
-      validate_params(alt, pitch_deg, roll_deg);
-      double pitch = M_PI * pitch_deg / 180.0;
-      double roll = M_PI * roll_deg / 180.0;
-      io_service.post(boost::bind(learn_task, &model, inpath, alt, pitch, roll));
-      cerr << format("PUSHED LEARN %s") % inpath << endl;
+      Params params = Params(line);
+      params.validate();
+      io_service.post(boost::bind(learn_task, &model, params.inpath, params.alt, params.pitch, params.roll));
+      cerr << format("PUSHED LEARN %s") % params.inpath << endl;
     } catch(std::runtime_error const &e) {
       cerr << format("ERROR parsing input metadata: %s") % e.what() << endl;
     } catch(std::exception) {
@@ -189,23 +197,12 @@ void learn_correct::correct() {
   // post jobs
   ifstream inpaths(PATH_FILE);  // FIXME hardcoded CSV file pathname
   string line;
-  typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
-  vector<string> fields;
   while(getline(inpaths,line)) { // read pathames from a file
     try {
-      Tokenizer tok(line);
-      fields.assign(tok.begin(),tok.end());
-      int f=0;
-      string inpath = fields.at(f++);
-      string outpath = fields.at(f++);
-      double alt = atof(fields.at(f++).c_str()); // altitude in m
-      double pitch_deg = atof(fields.at(f++).c_str());
-      double roll_deg = atof(fields.at(f++).c_str());
-      validate_params(alt, pitch_deg, roll_deg);
-      double pitch = M_PI * pitch_deg / 180.0;
-      double roll = M_PI * roll_deg / 180.0;
-      io_service.post(boost::bind(correct_task, &model, inpath, alt, pitch, roll, outpath));
-      cerr << format("PUSHED CORRECT %s") % inpath << endl;
+      Params params = Params(line);
+      params.validate();
+      io_service.post(boost::bind(correct_task, &model, params.inpath, params.alt, params.pitch, params.roll, params.outpath));
+      cerr << format("PUSHED CORRECT %s") % params.inpath << endl;
     } catch(std::runtime_error const &e) {
       cerr << format("ERROR parsing input metadata: %s") % e.what() << endl;
     } catch(std::exception) {

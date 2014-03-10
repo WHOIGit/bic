@@ -12,3 +12,5 @@ namespace learn_correct {
 #define ALT_SPACING_M 0.1 // FIXME hardcoded altitude bin spacing
 #define FOCAL_LENGTH_M 0.012 // FIXME hardcoded focal length
 #define PIXEL_SEP_M 0.0000065 // FIXME hardcoded pixel separation
+#define H2O_ADJUSTMENT 1.2 // FIXME hardcoded parallax scaling factor
+#define PARALLAX_TEMPLATE_SIZE 64 // FIXME hardcoded parallax parameter
