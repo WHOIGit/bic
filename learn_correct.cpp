@@ -4,9 +4,7 @@
 #include <ios>
 #include <opencv2/opencv.hpp>
 #include <boost/thread.hpp>
-#include <boost/format.hpp>
 #include <boost/asio.hpp>
-#include <boost/tokenizer.hpp>
 
 #include "learn_correct.hpp"
 #include "prototype.hpp"
@@ -18,46 +16,6 @@ using namespace std;
 using namespace cv;
 
 using illum::MultiLightfield;
-
-// parameters necessary for each job
-class Params {
-  typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
-  void config(vector<string> fields) {
-    int f=0;
-    inpath = fields.at(f++);
-    outpath = fields.at(f++);
-    alt = atof(fields.at(f++).c_str()); // altitude in m
-    double pitch_deg = atof(fields.at(f++).c_str());
-    double roll_deg = atof(fields.at(f++).c_str());
-    pitch = M_PI * pitch_deg / 180.0;
-    roll = M_PI * roll_deg / 180.0;
-  }
-public:
-  string inpath;
-  string outpath;
-  double alt;
-  double pitch;
-  double roll;
-  Params(vector<string> fields) {
-    config(fields);
-  }
-  Params(string line) {
-    vector<string> fields;
-    Tokenizer tok(line);
-    fields.assign(tok.begin(),tok.end());
-    config(fields);
-  }
-  void validate() {
-    using boost::format;
-    const double extreme_angle = M_PI * 45.0 / 180.0; // FIXME hardcoded
-    if(alt < 0 || alt > 8) // FIXME hardcoded
-      throw std::runtime_error(str(format("ERROR altitude out of range: %.2f (meters)") % alt));
-    else if(pitch < -extreme_angle || pitch > extreme_angle)
-      throw std::runtime_error(str(format("ERROR pitch out of range: %.2f (radians)") % pitch));
-    else if(roll < -extreme_angle || roll > extreme_angle) // FIXME hardcoded
-      throw std::runtime_error(str(format("ERROR roll out of range: %.2f (radians)") % roll));
-  }
-};
 
 // the learn task adds an image to a multilightfield model
 void learn_task(MultiLightfield *model, string inpath, double alt, double pitch, double roll) {
@@ -153,7 +111,7 @@ void learn_correct::learn() {
   string line;
   while(getline(inpaths,line)) { // read pathames from a file
     try {
-      Params params = Params(line);
+      Task params = Task(line);
       params.validate();
       io_service.post(boost::bind(learn_task, &model, params.inpath, params.alt, params.pitch, params.roll));
       cerr << format("PUSHED LEARN %s") % params.inpath << endl;
@@ -199,7 +157,7 @@ void learn_correct::correct() {
   string line;
   while(getline(inpaths,line)) { // read pathames from a file
     try {
-      Params params = Params(line);
+      Task params = Task(line);
       params.validate();
       io_service.post(boost::bind(correct_task, &model, params.inpath, params.alt, params.pitch, params.roll, params.outpath));
       cerr << format("PUSHED CORRECT %s") % params.inpath << endl;

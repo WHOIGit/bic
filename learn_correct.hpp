@@ -1,9 +1,10 @@
 #pragma once
+#include <string>
+#include <boost/format.hpp>
+#include <boost/tokenizer.hpp>
+#include <boost/program_options.hpp>
 
-namespace learn_correct {
-  void learn();
-  void correct();
-}
+#define H2O_ADJUSTMENT 1.2 // FIXME hardcoded parallax scaling factor
 
 #define PATH_FILE "aprs.csv" // FIXME hardcoded CSV file path
 #define BAYER_PATTERN "rggb" // FIXME hardcoded bayer pattern
@@ -14,3 +15,75 @@ namespace learn_correct {
 #define PIXEL_SEP_M 0.0000065 // FIXME hardcoded pixel separation
 #define H2O_ADJUSTMENT 1.2 // FIXME hardcoded parallax scaling factor
 #define PARALLAX_TEMPLATE_SIZE 64 // FIXME hardcoded parallax parameter
+
+#define OPT_LIGHTMAP_DIR "lightmap" // lightmap directory
+#define OPT_BAYER_PATTERN "bayer" // bayer pattern
+#define OPT_N_THREADS "threads" // number of threads
+#define OPT_ALT_SPACING "alt-spacing" // altitude spacing (m)
+#define OPT_FOCAL_LENGTH "focal-length" // focal length (m)
+#define OPT_PIXEL_SEP "pixel-size" // pixel size (m)
+#define OPT_TEMPLATE_SIZE "patch-size" // parallax tempalte size (pixels)
+#define OPT_SMOOTHING "smooth" // lightmap smoothking kernel size (pixels)
+
+namespace po = boost::program_options;
+
+namespace learn_correct {
+  void learn();
+  void correct();
+  // parameters for entire run
+  class Params {
+  public:
+    std::string bayer_pattern;
+    int n_threads;
+    std::string lightmap_dir; // was OUT_DIR
+    double alt_spacing;
+    double focal_length;
+    double pixel_sep;
+    double h2o_adjustment; // for parallax
+    int parallax_template_size; // PARALLAX_TEMPLATE_SIZE
+    int lightmap_smoothing; // size of smoothing kernel for lightmap
+    // set from command-line options
+    Params(po::variables_map options) {
+      // FIXME do something
+    }
+  };
+  // parameters for each task
+  class Task {
+    typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
+    void config(std::vector<std::string> fields) {
+      int f=0;
+      inpath = fields.at(f++);
+      outpath = fields.at(f++);
+      alt = atof(fields.at(f++).c_str()); // altitude in m
+      double pitch_deg = atof(fields.at(f++).c_str());
+      double roll_deg = atof(fields.at(f++).c_str());
+      pitch = M_PI * pitch_deg / 180.0;
+      roll = M_PI * roll_deg / 180.0;
+    }
+  public:
+    std::string inpath;
+    std::string outpath;
+    double alt;
+    double pitch;
+    double roll;
+    Task(std::vector<std::string> fields) {
+      config(fields);
+    }
+    Task(std::string line) {
+      std::vector<std::string> fields;
+      Tokenizer tok(line);
+      fields.assign(tok.begin(),tok.end());
+      config(fields);
+    }
+    void validate() {
+      using boost::format;
+      const double extreme_angle = M_PI * 45.0 / 180.0; // FIXME hardcoded
+      if(alt < 0 || alt > 8) // FIXME hardcoded
+	throw std::runtime_error(str(format("ERROR altitude out of range: %.2f (meters)") % alt));
+      else if(pitch < -extreme_angle || pitch > extreme_angle)
+	throw std::runtime_error(str(format("ERROR pitch out of range: %.2f (radians)") % pitch));
+      else if(roll < -extreme_angle || roll > extreme_angle) // FIXME hardcoded
+	throw std::runtime_error(str(format("ERROR roll out of range: %.2f (radians)") % roll));
+    }
+  };
+}
