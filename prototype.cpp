@@ -17,6 +17,9 @@
 using namespace std;
 using namespace cv;
 
+#define N_THREADS 12
+#define PATH_FILE "aprs.csv"
+
 void prototype::test_effective_resolution() {
   using cv::Mat;
   using std::cerr;

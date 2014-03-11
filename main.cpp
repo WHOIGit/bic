@@ -29,6 +29,8 @@ int main(int argc, char **argv) {
     (OPT_ABBREV(OPT_TEMPLATE_SIZE,"T"),po::value<int>()->default_value(64),"size of parallax matching template (pixels)")
     (OPT_ABBREV(OPT_SMOOTHING,"s"),po::value<int>()->default_value(31),"size of lightmap smoothing kernel (pixels)")
     (OPT_ABBREV(OPT_CAMERA_SEP,"C"),po::value<double>()->default_value(0.235),"stereo camera spacing (meters)")
+    (OPT_ABBREV(OPT_MIN_BRIGHTNESS,"m"),po::value<double>()->default_value(0.05),"minimum brightness of lightmap (0-1)")
+    (OPT_ABBREV(OPT_MAX_BRIGHTNESS,"M"),po::value<double>()->default_value(0.7),"maximum brightness of lightmap (0-1)")
     ;
   // positional command line options
   po::positional_options_description popts;

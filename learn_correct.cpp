@@ -16,9 +16,10 @@ using namespace std;
 using namespace cv;
 
 using illum::MultiLightfield;
+using learn_correct::Params;
 
 // the learn task adds an image to a multilightfield model
-void learn_task(MultiLightfield *model, string inpath, double alt, double pitch, double roll) {
+void learn_task(Params *params, MultiLightfield *model, string inpath, double alt, double pitch, double roll) {
   using boost::format;
   cerr << nounitbuf;
   // get the input pathname
@@ -41,7 +42,7 @@ void learn_task(MultiLightfield *model, string inpath, double alt, double pitch,
 }
 
 // the correct task corrects images
-void correct_task(MultiLightfield *model, string inpath, double alt, double pitch, double roll, string outpath) {
+void correct_task(Params *params, MultiLightfield *model, string inpath, double alt, double pitch, double roll, string outpath) {
   using boost::format;
   cerr << nounitbuf;
   try {
@@ -59,22 +60,19 @@ void correct_task(MultiLightfield *model, string inpath, double alt, double pitc
     int w = average.size().width;
     Mat left = Mat(average,Rect(0,0,w/2,h));
     Mat right = Mat(average,Rect(w/2,0,w/2,h));
-    cfa_smooth(left,left,30); // FIXME hardcoded smoothing kernel size
-    cfa_smooth(right,right,30);
+    cfa_smooth(left,left,params->lightmap_smoothing);
+    cfa_smooth(right,right,params->lightmap_smoothing);
     cerr << "SMOOTHED lightmap" << endl;
     illum::correct(cfa_LR, cfa_LR, average); // correct it
     cerr << format("DEMOSAICING %s") % inpath << endl;
     // demosaic it
-    Mat rgb_LR = demosaic(cfa_LR,BAYER_PATTERN); // FIXME hardcoded param bayer pattern
-    /*stringstream outpath_exts;
-      string outpath_ext;
-      outpath_exts << outpath << ".png";
-      outpath_ext = outpath_exts.str();*/
+    Mat rgb_LR = demosaic(cfa_LR,params->bayer_pattern);
     outpath = outpath + ".png";
     cerr << format("SAVE RGB to %s") % outpath << endl;
-    double max = 0.7; // FIXME hardcoded max brightness
-    double min = 0.05; // FIXME hardcoded min brightness
-    // scale brightness and save as 8-bit png
+    // brightness and contrast parameters
+    double max = params->max_brightness;
+    double min = params->min_brightness;
+    // adjust brightness/contrast and save as 8-bit png
     Mat rgb_LR_8u;
     rgb_LR = rgb_LR * (255.0 / (65535.0 * (max - min))) - (min * 255.0);
     rgb_LR.convertTo(rgb_LR_8u, CV_8U);
@@ -113,7 +111,7 @@ void learn_correct::learn(learn_correct::Params p) {
     try {
       Task task = Task(line);
       task.validate();
-      io_service.post(boost::bind(learn_task, &model, task.inpath, task.alt, task.pitch, task.roll));
+      io_service.post(boost::bind(learn_task, &p, &model, task.inpath, task.alt, task.pitch, task.roll));
       cerr << format("PUSHED LEARN %s") % task.inpath << endl;
     } catch(std::runtime_error const &e) {
       cerr << format("ERROR parsing input metadata: %s") % e.what() << endl;
@@ -159,7 +157,7 @@ void learn_correct::correct(learn_correct::Params p) {
     try {
       Task task = Task(line);
       task.validate();
-      io_service.post(boost::bind(correct_task, &model, task.inpath, task.alt, task.pitch, task.roll, task.outpath));
+      io_service.post(boost::bind(correct_task, &p, &model, task.inpath, task.alt, task.pitch, task.roll, task.outpath));
       cerr << format("PUSHED CORRECT %s") % task.inpath << endl;
     } catch(std::runtime_error const &e) {
       cerr << format("ERROR parsing input metadata: %s") % e.what() << endl;

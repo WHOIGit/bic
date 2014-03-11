@@ -5,17 +5,7 @@
 #include <boost/program_options.hpp>
 #include <boost/thread.hpp>
 
-#define H2O_ADJUSTMENT 1.2 // FIXME hardcoded parallax scaling factor
-
-#define PATH_FILE "aprs.csv" // FIXME hardcoded CSV file path
-#define BAYER_PATTERN "rggb" // FIXME hardcoded bayer pattern
-#define OUT_DIR "out" // FIXME hardcoded model/output directory
-#define N_THREADS 12 // FIXME hardcoded thread count
-#define ALT_SPACING_M 0.1 // FIXME hardcoded altitude bin spacing
-#define FOCAL_LENGTH_M 0.012 // FIXME hardcoded focal length
-#define PIXEL_SEP_M 0.0000065 // FIXME hardcoded pixel separation
-#define H2O_ADJUSTMENT 1.2 // FIXME hardcoded parallax scaling factor
-#define PARALLAX_TEMPLATE_SIZE 64 // FIXME hardcoded parallax parameter
+#define H2O_ADJUSTMENT 1.2 // hardcoded parallax scaling factor
 
 #define OPT_LIGHTMAP_DIR "lightmap" // lightmap directory
 #define OPT_BAYER_PATTERN "bayer" // bayer pattern
@@ -26,6 +16,10 @@
 #define OPT_TEMPLATE_SIZE "patch-size" // parallax tempalte size (pixels)
 #define OPT_SMOOTHING "smooth" // lightmap smoothking kernel size (pixels)
 #define OPT_CAMERA_SEP "camera-spacing" // distance between focal points of cameras (meters)
+#define OPT_MIN_BRIGHTNESS "min-brightness" // min brightness of lightmap (0-1)
+#define OPT_MAX_BRIGHTNESS "max-brightness" // max brightness of lightmap (0-1)
+
+#define PATH_FILE "aprs.csv" // FIXME hardcoded
 
 namespace po = boost::program_options;
 
@@ -43,6 +37,8 @@ namespace learn_correct {
     int parallax_template_size; // PARALLAX_TEMPLATE_SIZE
     int lightmap_smoothing; // size of smoothing kernel for lightmap
     double camera_sep; // stereo camera spacing (meters)
+    double min_brightness; // min brightness of lightmap
+    double max_brightness; // max brightness of lightmap
     // set from command-line options
     Params(po::variables_map options) {
       using std::string;
@@ -58,6 +54,8 @@ namespace learn_correct {
       parallax_template_size = options[OPT_TEMPLATE_SIZE].as<int>();
       lightmap_smoothing = options[OPT_SMOOTHING].as<int>();
       camera_sep = options[OPT_CAMERA_SEP].as<double>();
+      min_brightness = options[OPT_MIN_BRIGHTNESS].as<double>();
+      max_brightness = options[OPT_MAX_BRIGHTNESS].as<double>();
     }
     friend std::ostream& operator<<(std::ostream &strm, const Params &p) {
       using std::endl;
@@ -70,6 +68,8 @@ namespace learn_correct {
       strm << OPT_TEMPLATE_SIZE << " = " << p.parallax_template_size << endl;
       strm << OPT_SMOOTHING << " = " << p.lightmap_smoothing << endl;
       strm << OPT_CAMERA_SEP << " = " << p.camera_sep << endl;
+      strm << OPT_MIN_BRIGHTNESS << " = " << p.min_brightness << endl;
+      strm << OPT_MAX_BRIGHTNESS << " = " << p.max_brightness << endl;
       return strm;
     }
   };
