@@ -33,7 +33,7 @@ double compute_missing_alt(Params *params, double alt, cv::Mat cfa_LR) {
     cfa_channel(cfa_LR, G, 1, 0);
   }
   // compute pixel offset
-  int x = align(G, params->parallax_template_size);
+  int x = align(G, params->parallax_template_size) * 2;
   if(x <= 0) // bad alignment
     throw std::runtime_error("unable to compute altitude from parallax");
   // convert to meters
@@ -55,6 +55,7 @@ void learn_task(Params *params, MultiLightfield *model, string inpath, double al
       throw std::runtime_error("image is not 16-bit grayscale");
     cerr << format("READ %s") % inpath << endl;
     // if altitude is <= 0, compute from parallax
+    alt = -1;
     if(alt <= 0) {
       alt = compute_missing_alt(params, alt, cfa_LR);
       cerr << format("PARALLAX altitude of %s is %.2f") % inpath % alt << endl;
@@ -80,6 +81,7 @@ void correct_task(Params *params, MultiLightfield *model, string inpath, double 
     if(cfa_LR.type() != CV_16U)
       throw std::runtime_error("image is not 16-bit grayscale");
     // if altitude is <= 0, compute from parallax
+    alt = -1;
     if(alt <= 0) {
       alt = compute_missing_alt(params, alt, cfa_LR);
       cerr << format("PARALLAX altitude of %s is %.2f") % inpath % alt << endl;
