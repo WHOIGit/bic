@@ -3,6 +3,7 @@
 #include <boost/format.hpp>
 #include <boost/tokenizer.hpp>
 #include <boost/program_options.hpp>
+#include <boost/thread.hpp>
 
 #define H2O_ADJUSTMENT 1.2 // FIXME hardcoded parallax scaling factor
 
@@ -47,7 +48,9 @@ namespace learn_correct {
       using std::string;
       bayer_pattern = options[OPT_BAYER_PATTERN].as<string>();
       n_threads = options[OPT_N_THREADS].as<int>();
-      // FIXME if <= 0, set to number of CPU cores
+      if(n_threads <= 0) {
+	n_threads = boost::thread::hardware_concurrency();
+      }
       lightmap_dir = options[OPT_LIGHTMAP_DIR].as<string>();
       alt_spacing = options[OPT_ALT_SPACING].as<double>();
       focal_length = options[OPT_FOCAL_LENGTH].as<double>();
