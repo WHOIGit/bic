@@ -44,7 +44,28 @@ namespace learn_correct {
     int lightmap_smoothing; // size of smoothing kernel for lightmap
     // set from command-line options
     Params(po::variables_map options) {
-      // FIXME do something
+      using std::string;
+      bayer_pattern = options[OPT_BAYER_PATTERN].as<string>();
+      n_threads = options[OPT_N_THREADS].as<int>();
+      // FIXME if <= 0, set to number of CPU cores
+      lightmap_dir = options[OPT_LIGHTMAP_DIR].as<string>();
+      alt_spacing = options[OPT_ALT_SPACING].as<double>();
+      focal_length = options[OPT_FOCAL_LENGTH].as<double>();
+      pixel_sep = options[OPT_PIXEL_SEP].as<double>();
+      parallax_template_size = options[OPT_TEMPLATE_SIZE].as<int>();
+      lightmap_smoothing = options[OPT_SMOOTHING].as<int>();
+    }
+    friend std::ostream& operator<<(std::ostream &strm, const Params &p) {
+      using std::endl;
+      strm << OPT_BAYER_PATTERN << " = " << p.bayer_pattern << endl;
+      strm << OPT_N_THREADS << " = " << p.n_threads << endl;
+      strm << OPT_LIGHTMAP_DIR << " = " << p.lightmap_dir << endl;
+      strm << OPT_ALT_SPACING << " = " << p.alt_spacing << endl;
+      strm << OPT_FOCAL_LENGTH << " = " << p.focal_length << endl;
+      strm << OPT_PIXEL_SEP << " = " << p.pixel_sep << endl;
+      strm << OPT_TEMPLATE_SIZE << " = " << p.parallax_template_size << endl;
+      strm << OPT_SMOOTHING << " = " << p.lightmap_smoothing << endl;
+      return strm;
     }
   };
   // parameters for each task
