@@ -7,6 +7,7 @@
 #include <boost/asio.hpp>
 
 #include "learn_correct.hpp"
+#include "stereo.hpp"
 #include "prototype.hpp"
 #include "demosaic.hpp"
 #include "illumination.hpp"
@@ -17,6 +18,27 @@ using namespace cv;
 
 using illum::MultiLightfield;
 using learn_correct::Params;
+
+double compute_missing_alt(Params *params, double alt, cv::Mat cfa_LR) {
+  using stereo::align;
+  using cv::Mat;
+  if(alt >= 0)
+    return alt;
+  // compute from parallax
+  // pull green channel
+  cv::Mat G;
+  if(params->bayer_pattern[0]=='g') {
+    cfa_channel(cfa_LR, G, 0, 0);
+  } else {
+    cfa_channel(cfa_LR, G, 1, 0);
+  }
+  // compute pixel offset
+  int x = align(G, params->parallax_template_size);
+  if(x <= 0) // bad alignment
+    throw std::runtime_error("unable to compute altitude from parallax");
+  // convert to meters
+  return (params->camera_sep * params->focal_length * H2O_ADJUSTMENT) / (x * params->pixel_sep);
+}
 
 // the learn task adds an image to a multilightfield model
 void learn_task(Params *params, MultiLightfield *model, string inpath, double alt, double pitch, double roll) {
@@ -32,6 +54,11 @@ void learn_task(Params *params, MultiLightfield *model, string inpath, double al
     if(cfa_LR.type() != CV_16U)
       throw std::runtime_error("image is not 16-bit grayscale");
     cerr << format("READ %s") % inpath << endl;
+    // if altitude is <= 0, compute from parallax
+    if(alt <= 0) {
+      alt = compute_missing_alt(params, alt, cfa_LR);
+      cerr << format("PARALLAX altitude of %s is %.2f") % inpath % alt << endl;
+    }
     model->addImage(cfa_LR, alt, pitch, roll);
     cerr << format("ADDED %s") % inpath << endl;
   } catch(std::runtime_error const &e) {
@@ -52,6 +79,11 @@ void correct_task(Params *params, MultiLightfield *model, string inpath, double 
       throw std::runtime_error("no image data");
     if(cfa_LR.type() != CV_16U)
       throw std::runtime_error("image is not 16-bit grayscale");
+    // if altitude is <= 0, compute from parallax
+    if(alt <= 0) {
+      alt = compute_missing_alt(params, alt, cfa_LR);
+      cerr << format("PARALLAX altitude of %s is %.2f") % inpath % alt << endl;
+    }
     // get the average
     Mat average = Mat::zeros(cfa_LR.size(), CV_32F);
     model->getAverage(average, alt, pitch, roll);

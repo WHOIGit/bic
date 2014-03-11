@@ -3,6 +3,7 @@
 #include <boost/format.hpp>
 #include <boost/tokenizer.hpp>
 #include <boost/program_options.hpp>
+#include <boost/algorithm/string.hpp>
 #include <boost/thread.hpp>
 
 #define H2O_ADJUSTMENT 1.2 // hardcoded parallax scaling factor
@@ -43,6 +44,7 @@ namespace learn_correct {
     Params(po::variables_map options) {
       using std::string;
       bayer_pattern = options[OPT_BAYER_PATTERN].as<string>();
+      boost::to_lower(bayer_pattern);
       n_threads = options[OPT_N_THREADS].as<int>();
       if(n_threads <= 0) {
 	n_threads = boost::thread::hardware_concurrency();
