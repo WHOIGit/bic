@@ -87,14 +87,14 @@ void correct_task(MultiLightfield *model, string inpath, double alt, double pitc
 }
 
 // learn phase
-void learn_correct::learn() {
+void learn_correct::learn(learn_correct::Params p) {
   // before any OpenCV operations are done, set global error flag
   cv::setBreakOnError(true);
   // ersatz logging setup
   using boost::format;
   cerr << nounitbuf;
   // construct an empty lightfield model
-  illum::MultiLightfield model(ALT_SPACING_M, FOCAL_LENGTH_M, PIXEL_SEP_M); // FIXME hardcoded altitude bin spacing and camera params
+  illum::MultiLightfield model(p.alt_spacing, p.focal_length, p.pixel_sep);
   // post all work
   boost::asio::io_service io_service;
   boost::thread_group workers;
@@ -103,7 +103,7 @@ void learn_correct::learn() {
   // use auto_ptr so we can indicate that no more jobs will be posted
   auto_ptr<boost::asio::io_service::work> work(new boost::asio::io_service::work(io_service));
   // create the thread pool
-  for(int i = 0; i < N_THREADS; i++) { // FIXME hardcoded thread count
+  for(int i = 0; i < p.n_threads; i++) {
     workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
   }
   // now read input lines and post jobs
@@ -111,10 +111,10 @@ void learn_correct::learn() {
   string line;
   while(getline(inpaths,line)) { // read pathames from a file
     try {
-      Task params = Task(line);
-      params.validate();
-      io_service.post(boost::bind(learn_task, &model, params.inpath, params.alt, params.pitch, params.roll));
-      cerr << format("PUSHED LEARN %s") % params.inpath << endl;
+      Task task = Task(line);
+      task.validate();
+      io_service.post(boost::bind(learn_task, &model, task.inpath, task.alt, task.pitch, task.roll));
+      cerr << format("PUSHED LEARN %s") % task.inpath << endl;
     } catch(std::runtime_error const &e) {
       cerr << format("ERROR parsing input metadata: %s") % e.what() << endl;
     } catch(std::exception) {
@@ -127,11 +127,11 @@ void learn_correct::learn() {
   workers.join_all();
   cerr << "SUCCESS learn phase" << endl;
 
-  model.save(OUT_DIR); // FIXME hardcoded model/output directory
+  model.save(p.lightmap_dir);
   cerr << "SAVED model" << endl;
 }
 
-void learn_correct::correct() {
+void learn_correct::correct(learn_correct::Params p) {
   // before any OpenCV operations are done, set global error flag
   cv::setBreakOnError(true);
   using boost::format;
@@ -139,7 +139,7 @@ void learn_correct::correct() {
   // load model
   cerr << "LOADING model..." << endl;
   illum::MultiLightfield model;
-  model.load(OUT_DIR); // FIXME hardcoded model/output directory
+  model.load(p.lightmap_dir);
   cerr << "LOADED model" << endl;
 
   // post all work
@@ -149,7 +149,7 @@ void learn_correct::correct() {
   auto_ptr<boost::asio::io_service::work> work(new boost::asio::io_service::work(io_service));
   // start a thread pool
   boost::thread_group workers;
-  for(int i = 0; i < N_THREADS; i++) { // FIXME hardcoded thread count
+  for(int i = 0; i < p.n_threads; i++) {
     workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
   }
   // post jobs
@@ -157,10 +157,10 @@ void learn_correct::correct() {
   string line;
   while(getline(inpaths,line)) { // read pathames from a file
     try {
-      Task params = Task(line);
-      params.validate();
-      io_service.post(boost::bind(correct_task, &model, params.inpath, params.alt, params.pitch, params.roll, params.outpath));
-      cerr << format("PUSHED CORRECT %s") % params.inpath << endl;
+      Task task = Task(line);
+      task.validate();
+      io_service.post(boost::bind(correct_task, &model, task.inpath, task.alt, task.pitch, task.roll, task.outpath));
+      cerr << format("PUSHED CORRECT %s") % task.inpath << endl;
     } catch(std::runtime_error const &e) {
       cerr << format("ERROR parsing input metadata: %s") % e.what() << endl;
     } catch(std::exception) {

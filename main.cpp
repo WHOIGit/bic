@@ -28,6 +28,7 @@ int main(int argc, char **argv) {
     (OPT_ABBREV(OPT_PIXEL_SEP,"p"),po::value<double>()->default_value(0.0000065),"grid spacing of pixels on sensor (meters)")
     (OPT_ABBREV(OPT_TEMPLATE_SIZE,"T"),po::value<int>()->default_value(64),"size of parallax matching template (pixels)")
     (OPT_ABBREV(OPT_SMOOTHING,"s"),po::value<int>()->default_value(31),"size of lightmap smoothing kernel (pixels)")
+    (OPT_ABBREV(OPT_CAMERA_SEP,"C"),po::value<double>()->default_value(0.235),"stereo camera spacing (meters)")
     ;
   // positional command line options
   po::positional_options_description popts;
@@ -43,11 +44,10 @@ int main(int argc, char **argv) {
   // take action
   if(options.count(OPT_COMMAND)) {
     string command = options[OPT_COMMAND].as<string>();
-    cerr << "command is " << command << endl;
     if(command=="learn") {
-      learn_correct::learn();
+      learn_correct::learn(params);
     } else if(command=="correct") {
-      learn_correct::correct();
+      learn_correct::correct(params);
     } else if(command=="res") {
       prototype::test_effective_resolution();
     } else if(command=="flat") {
