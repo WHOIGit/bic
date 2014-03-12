@@ -25,7 +25,7 @@ int main(int argc, char **argv) {
     (OPT_ABBREV(OPT_N_THREADS,"t"),po::value<int>()->default_value(0),"number of threads")
     (OPT_ABBREV(OPT_ALT_SPACING,"a"),po::value<double>()->default_value(0.1),"distance between altitude bins (meters)")
     (OPT_ABBREV(OPT_FOCAL_LENGTH,"f"),po::value<double>()->default_value(0.012),"effective focal length (meters)")
-    (OPT_ABBREV(OPT_PIXEL_SEP,"p"),po::value<double>()->default_value(0.0000065),"grid spacing of pixels on sensor (meters)")
+    (OPT_ABBREV(OPT_PIXEL_SEP,"p"),po::value<double>()->default_value(0.00000645),"grid spacing of pixels on sensor (meters)")
     (OPT_ABBREV(OPT_TEMPLATE_SIZE,"T"),po::value<int>()->default_value(64),"size of parallax matching template (pixels)")
     (OPT_ABBREV(OPT_SMOOTHING,"s"),po::value<int>()->default_value(31),"size of lightmap smoothing kernel (pixels)")
     (OPT_ABBREV(OPT_CAMERA_SEP,"C"),po::value<double>()->default_value(0.235),"stereo camera spacing (meters)")
