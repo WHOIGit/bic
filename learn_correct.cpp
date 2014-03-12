@@ -22,7 +22,7 @@ using learn_correct::Params;
 double compute_missing_alt(Params *params, double alt, cv::Mat cfa_LR) {
   using stereo::align;
   using cv::Mat;
-  if(alt >= 0)
+  if(alt > 0)
     return alt;
   // compute from parallax
   // pull green channel
@@ -55,7 +55,6 @@ void learn_task(Params *params, MultiLightfield *model, string inpath, double al
       throw std::runtime_error("image is not 16-bit grayscale");
     cerr << format("READ %s") % inpath << endl;
     // if altitude is <= 0, compute from parallax
-    alt = -1;
     if(alt <= 0) {
       alt = compute_missing_alt(params, alt, cfa_LR);
       cerr << format("PARALLAX altitude of %s is %.2f") % inpath % alt << endl;
@@ -81,11 +80,9 @@ void correct_task(Params *params, MultiLightfield *model, string inpath, double 
     if(cfa_LR.type() != CV_16U)
       throw std::runtime_error("image is not 16-bit grayscale");
     // if altitude is <= 0, compute from parallax
-    double old_alt = alt;
-    alt = -1;
     if(alt <= 0) {
       alt = compute_missing_alt(params, alt, cfa_LR);
-      cerr << format("PARALLAX altitude of %s is %.2f (vs. %.2f)") % inpath % alt % old_alt << endl;
+      cerr << format("PARALLAX altitude of %s is %.2f") % inpath % alt << endl;
     }
     // get the average
     Mat average = Mat::zeros(cfa_LR.size(), CV_32F);
