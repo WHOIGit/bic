@@ -7,7 +7,9 @@
 #include <boost/thread.hpp>
 
 #define H2O_ADJUSTMENT 1.2 // hardcoded parallax scaling factor
+#define MAX_ALTITUDE 10 // hardcoded maximum altitude; sanity check
 
+#define OPT_INPUT "input" // input CSV file (default stdin)
 #define OPT_LIGHTMAP_DIR "lightmap" // lightmap directory
 #define OPT_BAYER_PATTERN "bayer" // bayer pattern
 #define OPT_N_THREADS "threads" // number of threads
@@ -20,8 +22,6 @@
 #define OPT_MIN_BRIGHTNESS "min-brightness" // min brightness of lightmap (0-1)
 #define OPT_MAX_BRIGHTNESS "max-brightness" // max brightness of lightmap (0-1)
 
-#define PATH_FILE "aprs.csv" // FIXME hardcoded
-
 namespace po = boost::program_options;
 
 namespace learn_correct {
@@ -30,6 +30,7 @@ namespace learn_correct {
   public:
     std::string bayer_pattern;
     int n_threads;
+    std::string input;
     std::string lightmap_dir; // was OUT_DIR
     double alt_spacing;
     double focal_length;
@@ -43,6 +44,7 @@ namespace learn_correct {
     // set from command-line options
     Params(po::variables_map options) {
       using std::string;
+      input = options[OPT_INPUT].as<string>();
       bayer_pattern = options[OPT_BAYER_PATTERN].as<string>();
       boost::to_lower(bayer_pattern);
       n_threads = options[OPT_N_THREADS].as<int>();
@@ -61,6 +63,7 @@ namespace learn_correct {
     }
     friend std::ostream& operator<<(std::ostream &strm, const Params &p) {
       using std::endl;
+      strm << OPT_INPUT << " = " << p.input << endl;
       strm << OPT_BAYER_PATTERN << " = " << p.bayer_pattern << endl;
       strm << OPT_N_THREADS << " = " << p.n_threads << endl;
       strm << OPT_LIGHTMAP_DIR << " = " << p.lightmap_dir << endl;
@@ -108,12 +111,15 @@ namespace learn_correct {
       fields.assign(tok.begin(),tok.end());
       config(fields);
     }
+    /**
+     * Check task to look for values out of range.
+     * Does not check altitude, as out of range values are handled
+     * by computing altitude from parallax.
+     */
     void validate() {
       using boost::format;
       const double extreme_angle = M_PI * 45.0 / 180.0; // FIXME hardcoded
-      if(alt < 0 || alt > 8) // FIXME hardcoded
-	throw std::runtime_error(str(format("ERROR altitude out of range: %.2f (meters)") % alt));
-      else if(pitch < -extreme_angle || pitch > extreme_angle)
+      if(pitch < -extreme_angle || pitch > extreme_angle)
 	throw std::runtime_error(str(format("ERROR pitch out of range: %.2f (radians)") % pitch));
       else if(roll < -extreme_angle || roll > extreme_angle)
 	throw std::runtime_error(str(format("ERROR roll out of range: %.2f (radians)") % roll));

@@ -19,11 +19,14 @@ using namespace cv;
 using illum::MultiLightfield;
 using learn_correct::Params;
 
-double compute_missing_alt(Params *params, double alt, cv::Mat cfa_LR) {
+double compute_missing_alt(Params *params, double alt, cv::Mat cfa_LR, std::string inpath) {
   using stereo::align;
   using cv::Mat;
-  if(alt > 0)
+  using boost::format;
+  // if altitude is good, don't recompute it
+  if(alt > 0 && alt < MAX_ALTITUDE) {
     return alt;
+  }
   // compute from parallax
   // pull green channel
   Mat G;
@@ -37,7 +40,10 @@ double compute_missing_alt(Params *params, double alt, cv::Mat cfa_LR) {
   if(x <= 0) // bad alignment
     throw std::runtime_error("unable to compute altitude from parallax");
   // convert to meters
-  return (params->camera_sep * params->focal_length * H2O_ADJUSTMENT) / (x * params->pixel_sep);
+  alt = (params->camera_sep * params->focal_length * H2O_ADJUSTMENT) / (x * params->pixel_sep);
+  // log what just happened
+  cerr << format("PARALLAX altitude of %s is %.2f") % inpath % alt << endl;
+  return alt;
 }
 
 // the learn task adds an image to a multilightfield model
@@ -54,11 +60,8 @@ void learn_task(Params *params, MultiLightfield *model, string inpath, double al
     if(cfa_LR.type() != CV_16U)
       throw std::runtime_error("image is not 16-bit grayscale");
     cerr << format("READ %s") % inpath << endl;
-    // if altitude is <= 0, compute from parallax
-    if(alt <= 0) {
-      alt = compute_missing_alt(params, alt, cfa_LR);
-      cerr << format("PARALLAX altitude of %s is %.2f") % inpath % alt << endl;
-    }
+    // if altitude is out of range, compute from parallax
+    alt = compute_missing_alt(params, alt, cfa_LR, inpath);
     model->addImage(cfa_LR, alt, pitch, roll);
     cerr << format("ADDED %s") % inpath << endl;
   } catch(std::runtime_error const &e) {
@@ -79,11 +82,8 @@ void correct_task(Params *params, MultiLightfield *model, string inpath, double 
       throw std::runtime_error("no image data");
     if(cfa_LR.type() != CV_16U)
       throw std::runtime_error("image is not 16-bit grayscale");
-    // if altitude is <= 0, compute from parallax
-    if(alt <= 0) {
-      alt = compute_missing_alt(params, alt, cfa_LR);
-      cerr << format("PARALLAX altitude of %s is %.2f") % inpath % alt << endl;
-    }
+    // if altitude is out of range, compute from parallax
+    alt = compute_missing_alt(params, alt, cfa_LR, inpath);
     // get the average
     Mat average = Mat::zeros(cfa_LR.size(), CV_32F);
     model->getAverage(average, alt, pitch, roll);
@@ -116,6 +116,14 @@ void correct_task(Params *params, MultiLightfield *model, string inpath, double 
   }
 }
 
+std::istream* get_input(learn_correct::Params p) {
+  if(p.input == "-") { // use stdin
+    return &cin;
+  } else {
+    return new ifstream(p.input.c_str());
+  }
+}
+
 // learn phase
 void learn_correct::learn(learn_correct::Params p) {
   // before any OpenCV operations are done, set global error flag
@@ -137,9 +145,9 @@ void learn_correct::learn(learn_correct::Params p) {
     workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
   }
   // now read input lines and post jobs
-  ifstream inpaths(PATH_FILE); // FIXME hardcoded CSV file pathname
+  istream* csv_in = get_input(p);
   string line;
-  while(getline(inpaths,line)) { // read pathames from a file
+  while(getline(*csv_in,line)) { // read pathames from a file
     try {
       Task task = Task(line);
       task.validate();
@@ -183,9 +191,9 @@ void learn_correct::correct(learn_correct::Params p) {
     workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
   }
   // post jobs
-  ifstream inpaths(PATH_FILE);  // FIXME hardcoded CSV file pathname
+  istream* csv_in = get_input(p);
   string line;
-  while(getline(inpaths,line)) { // read pathames from a file
+  while(getline(*csv_in,line)) { // read pathames from a file
     try {
       Task task = Task(line);
       task.validate();
