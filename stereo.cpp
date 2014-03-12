@@ -61,8 +61,6 @@ int stereo::align(cv::Mat y_LR_in, int template_size) {
     if(xoff < 0 || ydiff > ts2) {
       continue;
     }
-    rectangle(y_LR_in,Point(x,y),Point(x+ts,y+ts),0);
-    rectangle(y_LR_in,Point(mx,my),Point(mx+ts,my+ts),0);
     samples(x-(mx-w2));
     n++;
   }

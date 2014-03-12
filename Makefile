@@ -7,7 +7,10 @@ OBJS=$(subst .cpp,.o,$(SRCS))
 
 includes = $(wildcard *.hpp)
 
-all: app
+all: app align_check
+
+align_check: align_check.o
+	g++ $(LDFLAGS) -o align_check align_check.o stereo.o demosaic.o $(LDLIBS)
 
 app: $(OBJS)
 	g++ $(LDFLAGS) -o app $(OBJS) $(LDLIBS) 
@@ -18,3 +21,5 @@ app: $(OBJS)
 clean:
 	$(RM) $(OBJS)
 	$(RM) app
+	$(RM) align_check.o
+	$(RM) align_check
