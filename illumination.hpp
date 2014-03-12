@@ -41,12 +41,32 @@ namespace illum {
   void correct(cv::InputArray src, cv::OutputArray dst, cv::Mat lightfield);
 };
 
+/**
+ * Lightfield provides frame-averaging for any sequence of
+ * single-channel images. It also allows for input images to partially
+ * contribute to the lightfield on either a per-image or per-pixel
+ * basis, to allow for more complex applications (see
+ * MultiLightfield).
+ *
+ * All images must be the same dimensions. No interpolation,
+ * processing, scaling, or adjustment is done to images or pixel
+ * values. The expected dimensions are determined by the first image
+ * added.
+ *
+ * Initialization is lazy; one simply constructs this object, adds
+ * images, and then requests the average. The average can be requested
+ * at any time and images can be added after it that contribute to a
+ * new average.
+ *
+ * A lightfield can be saved and loaded from a 16-bit TIFF
+ * image. Lightfieldss that have been loaded can have new images added to
+ * them and then the lightfields can be saved again.
+ */
 class illum::Lightfield {
   typedef cv::Mat Mat;
   typedef std::string string; 
   Mat sum; // running sum
   Mat count; // running count (fractional)
-  // lazy initialization based on size of first image
   void init(Mat image) {
     if(image.empty())
       throw std::runtime_error("cannot initialize lightmap with empty image");
@@ -63,6 +83,10 @@ class illum::Lightfield {
       throw std::runtime_error("input image not the same size as lightfield");
   }
 public:
+  /**
+   * Construct an empty lightfield, ready for images to be added to
+   * it.
+   */
   Lightfield() { }
   /**
    * Is this lightfield empty or uninitialized?
@@ -75,7 +99,7 @@ public:
    *
    * @param image the image to add
    * @param alpha an alpha channel specifying the contribution of the
-   *   image to the average per-pixel
+   *   image to the average per-pixel (range 0-1)
    */
   void addImage(Mat image, Mat alpha) {
     validate(image);
@@ -90,6 +114,8 @@ public:
    * Add an image to the running total.
    *
    * @param image the image to add
+   * @param alpha an alpha value specifying the contribution of the image to
+   * the average (default 1.0)
    */
   void addImage(Mat image, double alpha=1.0) {
     validate(image);
@@ -104,8 +130,9 @@ public:
   }
   /**
    * Compute the average image and return it in dst.
-   *
    * dst must be of type CV_32F.
+   *
+   * @param _dst the destination image
    */
   void getAverage(cv::OutputArray _dst) {
     Mat avg = getAverage();
@@ -116,7 +143,8 @@ public:
     getAverage().copyTo(dst);
   }
   /**
-   * Compute the average image and return it.
+   * Compute the average image and return it. The returned image will be
+   * of type CV_32F.
    *
    * @return a new image containing the average of all the images
    * added
@@ -187,7 +215,10 @@ public:
   }
 };
 
-// type parameter is the numerical type used for representing altitude
+/**
+ * One slice of a multi-lightfield. This internal class should not
+ * be used elsewhere.
+ */
 template <typename T> class Slice {
 private:
   boost::mutex mutex; // for threadsafety
@@ -211,9 +242,17 @@ public:
 
 /**
  * A multi-altitude lightfield consisting of a set of lightfields each
- * of which is associated with a specific altitude. Average images are
- * generated from arbitrary altitudes in the multi-lightfield's
- * altitude range via interpolation.
+ * of which is associated with a specific altitude class. Altitude classes
+ * are evenly-spaced, starting from 0, according to a parameter passed into
+ * the constructor.
+ *
+ * Average images are generated from arbitrary altitudes in the
+ * multi-lightfield's altitude range via interpolation.
+ *
+ * Interpolation accepts pitch and roll parameters in addition to altitude,
+ * which are used to estimate per-pixel distance to the substrate based on
+ * a simple geometric model of the relative configuration of the camera and
+ * an assumed flat substrate.
  */
 class illum::MultiLightfield {
   typedef cv::Mat Mat;
@@ -241,9 +280,9 @@ public:
    * Create a multi-altitude lightfield.
    * @param step_m the width of each altitude bin in m (default: 10cm)
    * @param focal_length_m the effective focal length in m (default: 12mm)
-   * @param pixel_sep_m the physical size of a pixel in m (default: 6.5um)
+   * @param pixel_sep_m the physical size of a pixel in m (default: 6.45um)
    */
-  MultiLightfield(double step_m=0.1, double focal_length_m=0.012, double pixel_sep_m=0.0000065) {
+  MultiLightfield(double step_m=0.1, double focal_length_m=0.012, double pixel_sep_m=0.00000645) {
     alt_step = step_m;
     focal_length = focal_length_m;
     pixel_sep = pixel_sep_m;
@@ -284,7 +323,7 @@ public:
    * Get the average image at the given altitude.
    * If the altitude is not located exactly at one of the altitude bins,
    * the average image is interpolated between any overlapping bins.
-   * @param dst the output image (zeros at desired resolution)
+   * @param _dst the output image (zeros at desired resolution)
    * @param alt the altitude the image was taken at
    * @param pitch the pitch of the vehicle
    * @param roll the roll of the vehicle

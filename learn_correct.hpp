@@ -24,31 +24,74 @@
 
 namespace po = boost::program_options;
 
+/**
+ * Complete application for learning lightmaps and correction
+ * illumination for side-by-side RAW stereo pair TIFFs from a towed
+ * benthic vehicle (HabCam V4). Several assumptions are made by this
+ * application:
+ *
+ * - input images are side-by-side RAW stereo pairs in 16-bit TIFF format
+ * - desired output is color and illumination-corrected stereo pairs in 8-bit PNG format
+ * - input images are in locally-accessible storage
+ * - output images will be written to a locally-accessible storage
+ *
+ * The application is run in two phases; learn and correct.
+ * 
+ * In the learn phase, images are averaged together and a lightmap is
+ * produced.  The lightmap is stored as a series of 16-bit TIFFs
+ * containing statistical information.  Because of the lightmap
+ * format, a maximum of 65535 images can be averaged for each altitude
+ * bin (see other documentation for details about altitude bins).
+ *
+ * In the correct phase, images are adjusted according to a
+ * previously-learned lightmap to produce color, illumination, and
+ * contrast-adjusted color stereo pair.s
+ */
 namespace learn_correct {
-  // parameters for entire run
+  /**
+   * Configuration parameters. These represent all application
+   * paramters the "command" option specifying which procedure
+   * the main executable should do (e.g., learn, correct, etc.)
+   */
   class Params {
   public:
+    /** Bayer pattern of raw images (e.g., rggb). Case-insensitive */
     std::string bayer_pattern;
+    /** Number of threads to use when processing (default: number of CPUs on host) */
     int n_threads;
+    /** Input CSV file name (or "-" for stdin) */
     std::string input;
-    std::string lightmap_dir; // was OUT_DIR
+    /** Directory to read/write lightmap to */
+    std::string lightmap_dir;
+    /** Spacing of altitude bins in meters (default 10cm) */
     double alt_spacing;
+    /** Effective focal length of cameras in meters (default 12mm) */
     double focal_length;
+    /** Distance between pixel centers on sensor (m) (default 6.45um) */
     double pixel_sep;
-    double h2o_adjustment; // for parallax
+    //double h2o_adjustment; // for parallax
+    /** For stereo alignment, size of sample template in pixels (default 64) */
     int parallax_template_size; // PARALLAX_TEMPLATE_SIZE
+    /** For lightmap smoothing, size of smoothing kernel in pixels (default 31) */
     int lightmap_smoothing; // size of smoothing kernel for lightmap
+    /** Distance between cameras in meters (default 23.5cm) */
     double camera_sep; // stereo camera spacing (meters)
+    /** Minimum brightness of lightmaps in range (0-1) (default 0.05) */
     double min_brightness; // min brightness of lightmap
+    /** Maximum brightness of lightmap in range (0-1) (default 0.7) */
     double max_brightness; // max brightness of lightmap
-    // set from command-line options
+    /**
+     * Initialize parameters from a variable map.
+     *
+     * @param options the variable map
+     */
     Params(po::variables_map options) {
       using std::string;
       input = options[OPT_INPUT].as<string>();
       bayer_pattern = options[OPT_BAYER_PATTERN].as<string>();
       boost::to_lower(bayer_pattern);
       n_threads = options[OPT_N_THREADS].as<int>();
-      if(n_threads <= 0) {
+      if(n_threads <= 0) { // if number of threads is not specified, find it out
 	n_threads = boost::thread::hardware_concurrency();
       }
       lightmap_dir = options[OPT_LIGHTMAP_DIR].as<string>();
@@ -61,6 +104,14 @@ namespace learn_correct {
       min_brightness = options[OPT_MIN_BRIGHTNESS].as<double>();
       max_brightness = options[OPT_MAX_BRIGHTNESS].as<double>();
     }
+    /**
+     * Write a representation of the parameters to an output stream.
+     *
+     * Options are separated from values by '='
+     *
+     * @param strm the output stream
+     * @param p the parameters
+     */
     friend std::ostream& operator<<(std::ostream &strm, const Params &p) {
       using std::endl;
       strm << OPT_INPUT << " = " << p.input << endl;
@@ -80,7 +131,18 @@ namespace learn_correct {
   };
 
   // primary work scripts
+
+  /**
+   * Given application parameters, execute the learn phase.
+   *
+   * @param p the application parameters
+   */
   void learn(Params p);
+  /**
+   * Given application parameters, execute the correct phase.
+   *
+   * @param p the application parameters
+   */
   void correct(Params p);
 
   // parameters for each task

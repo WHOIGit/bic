@@ -1,6 +1,9 @@
 #pragma once
 #include <opencv2/opencv.hpp>
 
+/**
+ * Utilities for computing pixel offset between side-by-side stereo pairs.
+ */
 namespace stereo {
   /**
    * Estimate the alignment between a left-right stereo pair. This

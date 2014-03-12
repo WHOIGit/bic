@@ -2,10 +2,11 @@
 
 /**
  * Correct an image by dividing it by an illumination model image,
- * e.g., one computed by frame averaging
+ * e.g., one computed by frame averaging.
  *
- * @param src the source image
- * @param dst the destination image (must be same size and type as src)
+ * @param _src the source image
+ * @param _dst the destination image (must be same size and type as src)
+ * @param lightfield the appropriate average image returned by the lightfield
  * @return a new, correctly-illuminated image (in floating point)
  */
 void illum::correct(cv::InputArray _src, cv::OutputArray _dst, cv::Mat lightfield) {
