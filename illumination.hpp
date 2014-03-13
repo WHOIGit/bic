@@ -34,6 +34,10 @@
  * program execution. Under this usage there is a limit of 65,535
  * images that can be averaged before overflowing the checkpoint image
  * format.
+ *
+ * @author Joe Futrelle
+ *
+ * @brief frame averaging for illumination correction
  */
 namespace illum {
   class Lightfield;

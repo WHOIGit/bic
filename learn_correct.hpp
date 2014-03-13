@@ -45,7 +45,12 @@ namespace po = boost::program_options;
  *
  * In the correct phase, images are adjusted according to a
  * previously-learned lightmap to produce color, illumination, and
- * contrast-adjusted color stereo pair.s
+ * contrast-adjusted color stereo pairs.
+ *
+ * @author Joe Futrelle
+ *
+ * @brief application for supervised illumination correction of stereo
+ * benthic images
  */
 namespace learn_correct {
   /**

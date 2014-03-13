@@ -3,6 +3,10 @@
 
 /**
  * Utilities for computing pixel offset between side-by-side stereo pairs.
+ *
+ * @author Joe Futrelle
+ *
+ * @brief stereo alignment for uncalibrated images
  */
 namespace stereo {
   /**

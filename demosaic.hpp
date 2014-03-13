@@ -1,6 +1,13 @@
 #pragma once
 #include <opencv2/opencv.hpp>
 
+/** @file
+ * @brief Utilities for demosaicing RAW images.
+ *
+ * Also includes utilities for accessing and processing individual
+ * channels of RAW images without demosaicing.
+ */
+
 /**
  * Demosaic a color-filter-array (a.k.a. "RAW") image and produce
  * a three-channel color image (BGR).
@@ -28,11 +35,13 @@ cv::Mat demosaic(cv::Mat cfa, std::string cfaPattern="rggb");
  * each Bayer offset, i.e. an image laid out like this with respect to
  * Bayer offsets x,y:
  *
+ * ~~~
  * +---+---+
  * |0,0|1,0|
  * +---+---+
  * |0,1|1,1|
  * +---+---+
+ * ~~~
  *
  * @param src the CFA image
  * @param dst the channels mosaic (same size and type or will be
@@ -45,11 +54,13 @@ void cfa_quad(cv::InputArray src, cv::OutputArray dst);
  * each Bayer offset, i.e. an image laid out like this with respect to
  * Bayer offsets x,y:
  *
+ * ~~~
  * +---+---+
  * |0,0|1,0|
  * +---+---+
  * |0,1|1,1|
  * +---+---+
+ * ~~~
  *
  * produce the full-resolution CFA image. This is the inverse operation
  * of cfa_quad.
@@ -82,8 +93,7 @@ void cfa_channel(cv::InputArray src, cv::OutputArray dst, int x=0, int y=0);
  * @param ksize the kernel size. Use approximately half the kernel
  * size you would use for a full-resolution image. Must be odd. Sigma
  * will be computed from it using the following formula:
- *
- * 0.3*((ksize-1)*0.5 - 1) + 0.8;
+ * 0.3*((ksize-1)*0.5 - 1) + 0.8
  *
  * @param src the CFA image
  * @param dst the output image
