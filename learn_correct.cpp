@@ -5,6 +5,8 @@
 #include <opencv2/opencv.hpp>
 #include <boost/thread.hpp>
 #include <boost/asio.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/filesystem/path.hpp>
 
 #include "learn_correct.hpp"
 #include "stereo.hpp"
@@ -12,6 +14,8 @@
 #include "demosaic.hpp"
 #include "illumination.hpp"
 #include "interpolation.hpp"
+
+namespace fs = boost::filesystem;
 
 using namespace std;
 using namespace cv;
@@ -131,6 +135,13 @@ void learn_correct::learn(learn_correct::Params p) {
   // ersatz logging setup
   using boost::format;
   cerr << nounitbuf;
+  // before we begin, make sure we can write to the output directory by attempting
+  // to write a parameter file
+  fs::path paramfile(p.lightmap_dir);
+  paramfile /= "params.txt";
+  ofstream pout(paramfile.string().c_str());
+  pout << p;
+  pout.close();
   // construct an empty lightfield model
   illum::MultiLightfield model(p.alt_spacing, p.focal_length, p.pixel_sep);
   // post all work
@@ -179,7 +190,6 @@ void learn_correct::correct(learn_correct::Params p) {
   illum::MultiLightfield model;
   model.load(p.lightmap_dir);
   cerr << "LOADED model" << endl;
-
   // post all work
   boost::asio::io_service io_service;
   // use the work object to keep threads alive before jobs are posted
