@@ -4,10 +4,14 @@
 #include <fstream>
 #include <boost/thread.hpp>
 #include <opencv2/opencv.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/filesystem/path.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 
 #include "interpolation.hpp"
+
+namespace fs = boost::filesystem;
 
 /**
  * Use Lightfield to accumulate a frame average from multiple images
@@ -370,8 +374,10 @@ public:
       if(!lf->empty()) {
 	int count = slice->getAlt();
 	std::stringstream outpaths;
-	outpaths << outdir << "/slice_" << count << ".tiff";
-	lf->save(outpaths.str());
+	outpaths << "slice_" << count << ".tiff";
+	fs::path p(outdir);
+	p /= outpaths.str();
+	lf->save(p.string());
       }
     }
   }
@@ -386,10 +392,13 @@ public:
   void load(string outdir) {
     for(int count = 0; count < 1000; ++count) {
       std::stringstream inpaths;
-      inpaths << outdir << "/slice_" << count << ".tiff";
-      if(access(inpaths.str().c_str(),F_OK) != -1) {
+      inpaths << "slice_" << count << ".tiff";
+      fs::path p(outdir);
+      p /= inpaths.str();
+      if(fs::exists(p)) {
+      //if(access(p.string().c_str(),F_OK) != -1) {
 	Slice<int>* slice = getSlice(count);
-	slice->getLightfield()->load(inpaths.str());
+	slice->getLightfield()->load(p.string());
       }
     }
   }
