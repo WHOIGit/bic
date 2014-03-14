@@ -148,13 +148,13 @@ void learn_correct::learn(learn_correct::Params p) {
   fs::path outdir(p.lightmap_dir);
   if(p.create_directories)
     fs::create_directories(outdir);
+  if(!fs::exists(outdir))
+    throw std::runtime_error("output directory does not exist");
   fs::path paramfile = outdir / "params.txt";
   ofstream pout(paramfile.string().c_str());
-  pout << p;
+  if(!(pout << p)) // write parameters to parameter file
+    throw std::runtime_error("failed to write parameter file");
   pout.close();
-  if(!fs::exists(paramfile)) {
-    throw std::runtime_error("cannot write to output directory");
-  }
   // construct an empty lightfield model
   illum::MultiLightfield model(p.alt_spacing, p.focal_length, p.pixel_sep);
   // post all work
