@@ -120,7 +120,8 @@ void correct_task(Params *params, MultiLightfield *model, string inpath, double 
     rgb_LR.convertTo(rgb_LR_8u, CV_8U);
     // now write the output image
     cerr << format("SAVE RGB to %s") % outpath << endl;
-    imwrite(outpath, rgb_LR_8u);
+    if(!imwrite(outpath, rgb_LR_8u))
+      throw std::runtime_error("unable to write output image");
   } catch(std::runtime_error const &e) {
     cerr << "ERROR correcting " << inpath << ": " << e.what() << endl;
   } catch(std::exception) {
