@@ -77,6 +77,7 @@ void learn_task(Params *params, MultiLightfield *model, string inpath, double al
 
 // the correct task corrects images
 void correct_task(Params *params, MultiLightfield *model, string inpath, double alt, double pitch, double roll, string outpath) {
+  using namespace std;
   using boost::format;
   cerr << nounitbuf;
   try {

@@ -89,11 +89,56 @@ namespace learn_correct {
     /** Whether to create output directories if they do not exist */
     bool create_directories;
     /**
+     * Validate parameters. Checks for obviously invalid parameters
+     * such as negative focal lengths, min_brightness > max_brightness,
+     * etc. When a parameter is wrong, this will throw std::logic_error.
+     *
+     * In some cases this will produce warnings other than exceptions,
+     * e.g., n_threads greater than number of CPUs reported by
+     * boost::thread::hardware_concurrency.
+     */
+    void validate() {
+      using namespace std;
+      if(bayer_pattern != "rggb" && bayer_pattern != "bggr" &&
+	 bayer_pattern != "grbg" && bayer_pattern != "gbrg")
+	throw std::logic_error("unrecognized bayer pattern");
+      if(n_threads > boost::thread::hardware_concurrency())
+	cerr << "warning: number of threads greater than known number of hardware threads" << endl;
+      if(alt_spacing <= 0)
+	throw std::logic_error("alt spacing must be > 0m");
+      if(alt_spacing > 1)
+	cerr << "warning: alt spacing of " << alt_spacing << "m is >1m" << endl;
+      if(focal_length <= 0)
+	throw std::logic_error("focal length must be > 0m");
+      if(focal_length > 1)
+	cerr << "warning: focal length of " << focal_length << "m is >1m" << endl;
+      if(pixel_sep <= 0)
+	throw std::logic_error("pixel separation must be > 0m");
+      if(pixel_sep > 0.001)
+	cerr << "warning: pixel separation of " << pixel_sep << "m is >1mm" << endl;
+      if(parallax_template_size <= 0)
+	throw std::logic_error("parallax template size must be > 0px");
+      if(parallax_template_size < 8)
+	cerr << "warning: parallax template size of " << parallax_template_size << " is likely too small" << endl;
+      if(lightmap_smoothing <= 0)
+	throw std::logic_error("lightmap smoothing must be > 0px");
+      if(camera_sep <= 0)
+	throw std::logic_error("camera separation must be > 0m");
+      if(min_brightness < 0 || min_brightness > 1)
+	throw std::logic_error("min brightness must be between 0 and 1");
+      if(max_brightness < 0 || max_brightness > 1)
+	throw std::logic_error("max brightness must be between 0 and 1");
+      if(min_brightness > max_brightness)
+	throw std::logic_error("min brightness is < max brightness");
+    }
+    Params() { }
+    /**
      * Initialize parameters from a variable map.
      *
      * @param options the variable map
+     * @param _validate whether to validate them
      */
-    Params(po::variables_map options) {
+    Params(po::variables_map options, bool _validate=true) {
       using std::string;
       input = options[OPT_INPUT].as<string>();
       bayer_pattern = options[OPT_BAYER_PATTERN].as<string>();
@@ -112,6 +157,8 @@ namespace learn_correct {
       min_brightness = options[OPT_MIN_BRIGHTNESS].as<double>();
       max_brightness = options[OPT_MAX_BRIGHTNESS].as<double>();
       create_directories = options[OPT_CREATE_DIRECTORIES].as<bool>();
+      if(_validate)
+	validate();
     }
     /**
      * Write a representation of the parameters to an output stream.

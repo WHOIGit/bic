@@ -390,16 +390,19 @@ public:
    * @param outdir the output directory where the lightfield is stored
    */
   void load(string outdir) {
+    int loaded = 0;
     for(int count = 0; count < 1000; ++count) {
       std::stringstream inpaths;
       inpaths << "slice_" << count << ".tiff";
       fs::path p(outdir);
       p /= inpaths.str();
       if(fs::exists(p)) {
-      //if(access(p.string().c_str(),F_OK) != -1) {
 	Slice<int>* slice = getSlice(count);
 	slice->getLightfield()->load(p.string());
+	loaded++;
       }
     }
+    if(loaded == 0)
+      throw std::runtime_error("no lightmap slices found");
   }
 };

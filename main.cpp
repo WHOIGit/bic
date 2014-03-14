@@ -26,7 +26,7 @@ int main(int argc, char **argv) {
     (OPT_ABBREV(OPT_ALT_SPACING,"a"),po::value<double>()->default_value(0.1),"distance between altitude bins (meters)")
     (OPT_ABBREV(OPT_FOCAL_LENGTH,"f"),po::value<double>()->default_value(0.012),"effective focal length (meters)")
     (OPT_ABBREV(OPT_PIXEL_SEP,"p"),po::value<double>()->default_value(0.00000645),"grid spacing of pixels on sensor (meters)")
-    (OPT_ABBREV(OPT_TEMPLATE_SIZE,"T"),po::value<int>()->default_value(64),"size of parallax matching template (pixels)")
+    (OPT_ABBREV(OPT_TEMPLATE_SIZE,"P"),po::value<int>()->default_value(64),"size of parallax matching template (pixels)")
     (OPT_ABBREV(OPT_SMOOTHING,"s"),po::value<int>()->default_value(31),"size of lightmap smoothing kernel (pixels)")
     (OPT_ABBREV(OPT_CAMERA_SEP,"C"),po::value<double>()->default_value(0.235),"stereo camera spacing (meters)")
     (OPT_ABBREV(OPT_MIN_BRIGHTNESS,"m"),po::value<double>()->default_value(0.05),"minimum brightness of lightmap (0-1)")
@@ -34,17 +34,30 @@ int main(int argc, char **argv) {
     (OPT_ABBREV(OPT_INPUT,"i"),po::value<string>()->default_value("-"),"input file (default stdin, or use - to indicate stdin)")
     (OPT_ABBREV(OPT_CREATE_DIRECTORIES,"d"),po::value<bool>()->default_value(true),"create output directories if they don't exist (default true)")
     ;
-  // positional command line options
-  po::positional_options_description popts;
-  popts.add(OPT_COMMAND,-1);
-  // parse command line
-  po::parsed_options parsed = po::command_line_parser(argc, argv).options(copts).positional(popts).run();
   po::variables_map options;
-  po::store(parsed, options);
-  po::notify(options);
-  // now set up parameters object
-  Params params = Params(options);
-  cerr << params;
+  Params params;
+  try {
+    // positional command line options
+    po::positional_options_description popts;
+    popts.add(OPT_COMMAND,-1);
+    // parse command line
+    po::parsed_options parsed = po::command_line_parser(argc, argv).options(copts).positional(popts).run();
+    po::store(parsed, options);
+    po::notify(options);
+    // if the user just wants help, emit usage and exit
+    if(options.count("help")) {
+      cerr << copts << endl;
+      return -1;
+    }
+    // now set up parameters object
+    params = Params(options,false);
+    cerr << params;
+    params.validate();
+  } catch(std::logic_error const &e) {
+    cerr << "error: invalid parameter: " << e.what() << endl;
+    cerr << copts << endl;
+    return -1;
+  }
   // take action
   if(options.count(OPT_COMMAND)) {
     string command = options[OPT_COMMAND].as<string>();
