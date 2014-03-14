@@ -81,6 +81,14 @@ void correct_task(Params *params, MultiLightfield *model, string inpath, double 
   cerr << nounitbuf;
   try {
     cerr << format("POPPED %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll << endl;
+    // first, make sure we can write the output file
+    outpath = outpath + ".png";
+    fs::path outp(outpath);
+    fs::path outdir = outp.parent_path();
+    // now create output directory if necessary
+    if(params->create_directories)
+      fs::create_directories(outdir);
+    // proceed
     Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH); // read input image
     if(!cfa_LR.data)
       throw std::runtime_error("no image data");
@@ -103,8 +111,6 @@ void correct_task(Params *params, MultiLightfield *model, string inpath, double 
     cerr << format("DEMOSAICING %s") % inpath << endl;
     // demosaic it
     Mat rgb_LR = demosaic(cfa_LR,params->bayer_pattern);
-    outpath = outpath + ".png";
-    cerr << format("SAVE RGB to %s") % outpath << endl;
     // brightness and contrast parameters
     double max = params->max_brightness;
     double min = params->min_brightness;
@@ -112,6 +118,8 @@ void correct_task(Params *params, MultiLightfield *model, string inpath, double 
     Mat rgb_LR_8u;
     rgb_LR = rgb_LR * (255.0 / (65535.0 * (max - min))) - (min * 255.0);
     rgb_LR.convertTo(rgb_LR_8u, CV_8U);
+    // now write the output image
+    cerr << format("SAVE RGB to %s") % outpath << endl;
     imwrite(outpath, rgb_LR_8u);
   } catch(std::runtime_error const &e) {
     cerr << "ERROR correcting " << inpath << ": " << e.what() << endl;
@@ -137,11 +145,16 @@ void learn_correct::learn(learn_correct::Params p) {
   cerr << nounitbuf;
   // before we begin, make sure we can write to the output directory by attempting
   // to write a parameter file
-  fs::path paramfile(p.lightmap_dir);
-  paramfile /= "params.txt";
+  fs::path outdir(p.lightmap_dir);
+  if(p.create_directories)
+    fs::create_directories(outdir);
+  fs::path paramfile = outdir / "params.txt";
   ofstream pout(paramfile.string().c_str());
   pout << p;
   pout.close();
+  if(!fs::exists(paramfile)) {
+    throw std::runtime_error("cannot write to output directory");
+  }
   // construct an empty lightfield model
   illum::MultiLightfield model(p.alt_spacing, p.focal_length, p.pixel_sep);
   // post all work
@@ -176,6 +189,7 @@ void learn_correct::learn(learn_correct::Params p) {
   workers.join_all();
   cerr << "SUCCESS learn phase" << endl;
 
+  // we know output directory already exists and can be written to
   model.save(p.lightmap_dir);
   cerr << "SAVED model" << endl;
 }

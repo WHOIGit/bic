@@ -21,6 +21,7 @@
 #define OPT_CAMERA_SEP "camera-spacing" // distance between focal points of cameras (meters)
 #define OPT_MIN_BRIGHTNESS "min-brightness" // min brightness of lightmap (0-1)
 #define OPT_MAX_BRIGHTNESS "max-brightness" // max brightness of lightmap (0-1)
+#define OPT_CREATE_DIRECTORIES "create-directories" // whether to create nonexistent output directories
 
 namespace po = boost::program_options;
 
@@ -85,6 +86,8 @@ namespace learn_correct {
     double min_brightness; // min brightness of lightmap
     /** Maximum brightness of lightmap in range (0-1) (default 0.7) */
     double max_brightness; // max brightness of lightmap
+    /** Whether to create output directories if they do not exist */
+    bool create_directories;
     /**
      * Initialize parameters from a variable map.
      *
@@ -108,6 +111,7 @@ namespace learn_correct {
       camera_sep = options[OPT_CAMERA_SEP].as<double>();
       min_brightness = options[OPT_MIN_BRIGHTNESS].as<double>();
       max_brightness = options[OPT_MAX_BRIGHTNESS].as<double>();
+      create_directories = options[OPT_CREATE_DIRECTORIES].as<bool>();
     }
     /**
      * Write a representation of the parameters to an output stream.
@@ -131,6 +135,7 @@ namespace learn_correct {
       strm << OPT_CAMERA_SEP << " = " << p.camera_sep << endl;
       strm << OPT_MIN_BRIGHTNESS << " = " << p.min_brightness << endl;
       strm << OPT_MAX_BRIGHTNESS << " = " << p.max_brightness << endl;
+      strm << OPT_CREATE_DIRECTORIES << " = " << p.create_directories << endl;
       return strm;
     }
   };

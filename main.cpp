@@ -32,6 +32,7 @@ int main(int argc, char **argv) {
     (OPT_ABBREV(OPT_MIN_BRIGHTNESS,"m"),po::value<double>()->default_value(0.05),"minimum brightness of lightmap (0-1)")
     (OPT_ABBREV(OPT_MAX_BRIGHTNESS,"M"),po::value<double>()->default_value(0.7),"maximum brightness of lightmap (0-1)")
     (OPT_ABBREV(OPT_INPUT,"i"),po::value<string>()->default_value("-"),"input file (default stdin, or use - to indicate stdin)")
+    (OPT_ABBREV(OPT_CREATE_DIRECTORIES,"d"),po::value<bool>()->default_value(true),"create output directories if they don't exist (default true)")
     ;
   // positional command line options
   po::positional_options_description popts;
@@ -47,16 +48,24 @@ int main(int argc, char **argv) {
   // take action
   if(options.count(OPT_COMMAND)) {
     string command = options[OPT_COMMAND].as<string>();
-    if(command=="learn") {
-      learn_correct::learn(params);
-    } else if(command=="correct") {
-      learn_correct::correct(params);
-    } else if(command=="res") {
-      prototype::test_effective_resolution();
-    } else if(command=="flat") {
-      prototype::test_flatness();
-    } else {
-      stereo::xoff_test(argc,argv);
+    try {
+      if(command=="learn") {
+	learn_correct::learn(params);
+      } else if(command=="correct") {
+	learn_correct::correct(params);
+      } else if(command=="res") {
+	prototype::test_effective_resolution();
+      } else if(command=="flat") {
+	prototype::test_flatness();
+      } else {
+	stereo::xoff_test(argc,argv);
+      }
+    } catch(std::runtime_error const &e) {
+      cerr << "ERROR " << command << ": " << e.what() << endl;
+    } catch(std::exception) {
+      cerr << "ERROR " << command << endl;
     }
+  } else {
+    cerr << "Error: no command specified";
   }
 }

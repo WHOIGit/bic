@@ -5,21 +5,19 @@ LDLIBS=-lopencv_core -lopencv_imgproc -lopencv_highgui -lopencv_ml -lopencv_vide
 SRCS=main.cpp demosaic.cpp prototype.cpp illumination.cpp stereo.cpp interpolation.cpp learn_correct.cpp
 OBJS=$(subst .cpp,.o,$(SRCS))
 
+EXE=bic
+
 includes = $(wildcard *.hpp)
 
-all: app align_check
+all: $(EXE)
 
-align_check: align_check.o
-	g++ $(LDFLAGS) -o align_check align_check.o stereo.o demosaic.o $(LDLIBS)
-
-app: $(OBJS)
-	g++ $(LDFLAGS) -o app $(OBJS) $(LDLIBS) 
+bic: $(OBJS)
+	g++ $(LDFLAGS) -o $(EXE) $(OBJS) $(LDLIBS) 
 
 %.o: %.cpp ${includes}
 	g++ -c -g $< -o $@
 
 clean:
 	$(RM) $(OBJS)
-	$(RM) app
-	$(RM) align_check.o
-	$(RM) align_check
+	$(RM) $(EXE)
+
