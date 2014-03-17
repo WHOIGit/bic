@@ -69,7 +69,7 @@ int main(int argc, char **argv) {
       } else if(command=="res") {
 	prototype::test_effective_resolution();
       } else if(command=="flat") {
-	prototype::test_flatness();
+	prototype::test_flatness(params);
       } else {
 	stereo::xoff_test(argc,argv);
       }

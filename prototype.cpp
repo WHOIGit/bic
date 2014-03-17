@@ -7,12 +7,15 @@
 #include <boost/format.hpp>
 #include <boost/asio.hpp>
 #include <boost/tokenizer.hpp>
+#include <boost/filesystem.hpp>
 
 #include "learn_correct.hpp"
 #include "prototype.hpp"
 #include "demosaic.hpp"
 #include "illumination.hpp"
 #include "interpolation.hpp"
+
+namespace fs = boost::filesystem;
 
 using namespace std;
 using namespace cv;
@@ -88,28 +91,42 @@ void in_flat_task(illum::Lightfield* frameAverage, boost::mutex* mutex, string i
   cerr << "ADDED " << inpath << endl;
 }
 
-void out_flat_task(illum::Lightfield* frameAverage, boost::mutex* mutex, string inpath) {
+void out_flat_task(illum::Lightfield* R, illum::Lightfield* G, illum::Lightfield* B, boost::mutex* mutex, string inpath) {
   cerr << "POPPED " << inpath << endl;
-  cv::Mat bgr_LR = imread(inpath);
-  if(bgr_LR.empty()) {
-    return;
+  try {
+    cv::Mat bgr_LR = imread(inpath);
+    if(bgr_LR.empty()) {
+      return;
+    }
+    // extract color channels
+    std::vector<cv::Mat> channels;
+    cv::split(bgr_LR, channels);
+    { // protect frame average
+      boost::lock_guard<boost::mutex> lock(*mutex);
+      // BGR
+      B->addImage(channels[0]);
+      G->addImage(channels[1]);
+      R->addImage(channels[2]);
+    }
+    cerr << "ADDED " << inpath << endl;
+  } catch(std::runtime_error const &e) {
+    cerr << "ERROR adding " << inpath << ": " << e.what() << endl;
+  } catch(std::exception) {
+    cerr << "ERROR adding " << inpath << endl;
   }
-  // convert to grayscale
-  cv::Mat y_LR(bgr_LR.size().height, bgr_LR.size().width, CV_32F);
-  cv::cvtColor(bgr_LR, y_LR, CV_BGR2GRAY);
-  if(y_LR.empty())
-    throw std::runtime_error("grayscale conversion produced empty image");
-  { // protect frame average
-    boost::lock_guard<boost::mutex> lock(*mutex);
-    frameAverage->addImage(y_LR);
-  }
-  cerr << "ADDED " << inpath << endl;
 }
 
-void prototype::test_flatness() {
+void prototype::test_flatness(learn_correct::Params params) {
+  // before any OpenCV operations are done, set global error flag
+  cv::setBreakOnError(true);
+  // ersatz logging setup
+  using boost::format;
+  cerr << nounitbuf;
   boost::mutex correctMutex;
   boost::mutex rawMutex;
-  illum::Lightfield correctAverage;
+  illum::Lightfield R;
+  illum::Lightfield G;
+  illum::Lightfield B;
   illum::Lightfield rawAverage;
   // post all work
   boost::asio::io_service io_service;
@@ -123,20 +140,22 @@ void prototype::test_flatness() {
     workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
   }
   // post jobs
-  ifstream inpaths(PATH_FILE); // FIXME hardcoded CSV file pathname
+  istream *csv_in = learn_correct::get_input(params);
   string line;
-  typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
-  vector<string> fields;
-  while(getline(inpaths,line)) { // read pathames from a file
-    Tokenizer tok(line);
-    fields.assign(tok.begin(),tok.end());
-    string inpath = fields.at(0);
-    string outpath = fields.at(1) + ".png";
-    if(access(outpath.c_str(),F_OK) != -1) {
-      io_service.post(boost::bind(in_flat_task, &rawAverage, &rawMutex, inpath));
-      cerr << "PUSHED " << inpath << endl;
-      io_service.post(boost::bind(out_flat_task, &correctAverage, &correctMutex, outpath));
-      cerr << "PUSHED " << outpath << endl;
+  while(getline(*csv_in,line)) { // read pathames from a file
+    try {
+      learn_correct::Task task = learn_correct::Task(line); // not really doing this task, just configging
+      string outpath = task.outpath + ".png";
+      if(fs::exists(outpath)) {
+	io_service.post(boost::bind(in_flat_task, &rawAverage, &rawMutex, task.inpath));
+	cerr << "PUSHED " << task.inpath << endl;
+	io_service.post(boost::bind(out_flat_task, &R, &G, &B, &correctMutex, outpath));
+	cerr << "PUSHED " << outpath << endl;
+      }
+    } catch(std::runtime_error const &e) {
+      cerr << format("ERROR parsing input metadata: %s") % e.what() << endl;
+    } catch(std::exception) {
+      cerr << "ERROR parsing input metadata" << endl;
     }
   }
   // destroy the work object to indicate that there are no more jobs
@@ -148,7 +167,10 @@ void prototype::test_flatness() {
   cv::Mat avg = rawAverage.getAverage();
   imwrite("avg_raw.tiff",avg);
 
-  std::cerr << "WRITING correct average" << std::endl;
-  avg = correctAverage.getAverage();
-  imwrite("avg_correct.tiff",avg);
+  std::cerr << "WRITING correct average R" << std::endl;
+  imwrite("avg_correct_R.tiff",R.getAverage());
+  std::cerr << "WRITING correct average G" << std::endl;
+  imwrite("avg_correct_G.tiff",G.getAverage());
+  std::cerr << "WRITING correct average B" << std::endl;
+  imwrite("avg_correct_B.tiff",B.getAverage());
 }

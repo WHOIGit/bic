@@ -244,4 +244,12 @@ namespace learn_correct {
 	throw std::runtime_error(str(format("ERROR roll out of range: %.2f (radians)") % roll));
     }
   };
+
+  // utilities
+
+  /**
+   * Given program options, return a reference to the input stream
+   * @param Params the parameters
+   */
+  std::istream* get_input(Params);
 }

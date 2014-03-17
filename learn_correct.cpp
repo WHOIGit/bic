@@ -130,7 +130,7 @@ void correct_task(Params *params, MultiLightfield *model, string inpath, double 
   }
 }
 
-std::istream* get_input(learn_correct::Params p) {
+std::istream* learn_correct::get_input(learn_correct::Params p) {
   if(p.input == "-") { // use stdin
     return &cin;
   } else {
