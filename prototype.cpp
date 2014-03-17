@@ -147,8 +147,9 @@ void prototype::test_flatness(learn_correct::Params params) {
       learn_correct::Task task = learn_correct::Task(line); // not really doing this task, just configging
       string outpath = task.outpath + ".png";
       if(fs::exists(outpath)) {
-	io_service.post(boost::bind(in_flat_task, &rawAverage, &rawMutex, task.inpath));
-	cerr << "PUSHED " << task.inpath << endl;
+	// skip flat testing input
+	//io_service.post(boost::bind(in_flat_task, &rawAverage, &rawMutex, task.inpath));
+	//cerr << "PUSHED " << task.inpath << endl;
 	io_service.post(boost::bind(out_flat_task, &R, &G, &B, &correctMutex, outpath));
 	cerr << "PUSHED " << outpath << endl;
       }
@@ -163,9 +164,9 @@ void prototype::test_flatness(learn_correct::Params params) {
   // now run all pending jobs to completion
   workers.join_all();
 
-  std::cerr << "WRITING raw average" << std::endl;
-  cv::Mat avg = rawAverage.getAverage();
-  imwrite("avg_raw.tiff",avg);
+  //std::cerr << "WRITING raw average" << std::endl;
+  //cv::Mat avg = rawAverage.getAverage();
+  //imwrite("avg_raw.tiff",avg);
 
   std::cerr << "WRITING correct average R" << std::endl;
   imwrite("avg_correct_R.tiff",R.getAverage());

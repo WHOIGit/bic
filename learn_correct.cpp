@@ -2,11 +2,12 @@
 #include <string>
 #include <fstream>
 #include <ios>
-#include <opencv2/opencv.hpp>
 #include <boost/thread.hpp>
 #include <boost/asio.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/path.hpp>
+#include <opencv2/opencv.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 
 #include "learn_correct.hpp"
 #include "stereo.hpp"
@@ -79,11 +80,16 @@ void learn_task(Params *params, MultiLightfield *model, string inpath, double al
 void correct_task(Params *params, MultiLightfield *model, string inpath, double alt, double pitch, double roll, string outpath) {
   using namespace std;
   using boost::format;
+  using boost::algorithm::ends_with;
   cerr << nounitbuf;
   try {
     cerr << format("POPPED %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll << endl;
+    // make sure output path ends with ".png"
+    string lop = outpath;
+    boost::to_lower(lop);
+    if(!ends_with(lop,".png"))
+      outpath = outpath + ".png";
     // first, make sure we can write the output file
-    outpath = outpath + ".png";
     fs::path outp(outpath);
     fs::path outdir = outp.parent_path();
     // now create output directory if necessary
