@@ -8,6 +8,7 @@
 #include <boost/asio.hpp>
 #include <boost/tokenizer.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 
 #include "learn_correct.hpp"
 #include "prototype.hpp"
@@ -91,13 +92,25 @@ void in_flat_task(illum::Lightfield* frameAverage, boost::mutex* mutex, string i
   cerr << "ADDED " << inpath << endl;
 }
 
-void out_flat_task(illum::Lightfield* R, illum::Lightfield* G, illum::Lightfield* B, boost::mutex* mutex, string inpath) {
+void out_flat_task(learn_correct::Params* params, illum::Lightfield* R, illum::Lightfield* G, illum::Lightfield* B, boost::mutex* mutex, string inpath) {
+  using boost::algorithm::ends_with;
   cerr << "POPPED " << inpath << endl;
   try {
-    cv::Mat bgr_LR = imread(inpath);
-    if(bgr_LR.empty()) {
-      return;
+    string lop = inpath;
+    boost::to_lower(lop);
+    cv::Mat bgr_LR;
+    if(ends_with(lop,".png")) { // 8-bit color png?
+      bgr_LR = imread(inpath); // read it
+    } else if(ends_with(lop,".tif") || ends_with(lop,".tiff")) { // 16-bit raw TIFF?
+      cv::Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH); // read full bit depth
+      if(cfa_LR.empty())
+	return;
+      cerr << "DEMOSAIC " << inpath << endl;
+      cv::Mat bgr_LR_16u = demosaic(cfa_LR, params->bayer_pattern) / 255; // debayer and scale intensity
+      bgr_LR_16u.convertTo(bgr_LR, CV_8U);
     }
+    if(bgr_LR.empty())
+      return;
     // extract color channels
     std::vector<cv::Mat> channels;
     cv::split(bgr_LR, channels);
@@ -123,11 +136,9 @@ void prototype::test_flatness(learn_correct::Params params) {
   using boost::format;
   cerr << nounitbuf;
   boost::mutex correctMutex;
-  boost::mutex rawMutex;
   illum::Lightfield R;
   illum::Lightfield G;
   illum::Lightfield B;
-  illum::Lightfield rawAverage;
   // post all work
   boost::asio::io_service io_service;
   boost::thread_group workers;
@@ -144,14 +155,12 @@ void prototype::test_flatness(learn_correct::Params params) {
   string line;
   while(getline(*csv_in,line)) { // read pathames from a file
     try {
-      learn_correct::Task task = learn_correct::Task(line); // not really doing this task, just configging
-      string outpath = task.outpath + ".png";
+      string outpath = line;
       if(fs::exists(outpath)) {
-	// skip flat testing input
-	//io_service.post(boost::bind(in_flat_task, &rawAverage, &rawMutex, task.inpath));
-	//cerr << "PUSHED " << task.inpath << endl;
-	io_service.post(boost::bind(out_flat_task, &R, &G, &B, &correctMutex, outpath));
+	io_service.post(boost::bind(out_flat_task, &params, &R, &G, &B, &correctMutex, outpath));
 	cerr << "PUSHED " << outpath << endl;
+      } else {
+	cerr << "WARNING: can't find " << outpath << endl;
       }
     } catch(std::runtime_error const &e) {
       cerr << format("ERROR parsing input metadata: %s") % e.what() << endl;
@@ -163,10 +172,6 @@ void prototype::test_flatness(learn_correct::Params params) {
   work.reset();
   // now run all pending jobs to completion
   workers.join_all();
-
-  //std::cerr << "WRITING raw average" << std::endl;
-  //cv::Mat avg = rawAverage.getAverage();
-  //imwrite("avg_raw.tiff",avg);
 
   std::cerr << "WRITING correct average R" << std::endl;
   imwrite("avg_correct_R.tiff",R.getAverage());
