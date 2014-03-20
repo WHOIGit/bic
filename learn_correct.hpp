@@ -206,7 +206,12 @@ namespace learn_correct {
    * @param p the application parameters
    */
   void correct(Params p);
-
+  /**
+   * Given application parameters, execute the adaptive, combined
+   * learn/correct phase.
+   */
+  void adaptive(Params p);
+  
   // parameters for each task
   class Task {
     typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;

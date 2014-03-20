@@ -332,7 +332,7 @@ public:
     while(cv::countNonZero(W) > 0) {
       Slice<int>* slice = getSlice(i);
       boost::mutex* mutex = slice->get_mutex();
-      {
+      { // protect slice with mutex to prevent concurrent writes
 	boost::lock_guard<boost::mutex> lock(*mutex);
 	slice->getLightfield()->addImage(image, W);
       }
@@ -350,7 +350,6 @@ public:
    */
   void getAverage(cv::OutputArray _dst, double alt, double pitch, double roll) {
     Mat dst = _dst.getMat();
-    // FIXME tiles
     int width = dst.size().width;
     int height = dst.size().height;
     Mat D = Mat::zeros(height, width, CV_32F);
@@ -365,7 +364,13 @@ public:
     }
     while(cv::countNonZero(W) > 0) {
       Slice<int>* slice = getSlice(i);
-      Mat sAverage = slice->getLightfield()->getAverage();
+      Mat sAverage;
+      // get the slice average
+      boost::mutex* mutex = slice->get_mutex();
+      { // protect slice with mutex to prevent interleaved read/write operations
+	boost::lock_guard<boost::mutex> lock(*mutex);
+	sAverage = slice->getLightfield()->getAverage();
+      }
       dst += sAverage.mul(W); // multiply by slice weight
       interp::dist_weight(D, W, alt_step, i++);
     }

@@ -67,6 +67,8 @@ int main(int argc, char **argv) {
 	learn_correct::learn(params);
       } else if(command=="correct") {
 	learn_correct::correct(params);
+      } else if(command=="adaptive") {
+	learn_correct::adaptive(params);
       } else if(command=="res") {
 	prototype::test_effective_resolution(params);
       } else if(command=="flat") {
