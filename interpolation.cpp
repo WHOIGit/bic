@@ -1,5 +1,7 @@
 #include "interpolation.hpp"
 
+// FIXME assumes that axes of rotation intersect center of image
+// FIXME allow for specification of center at aribtrary location
 void interp::distance_map(cv::OutputArray _dst, double altitude, double pitch, double roll, double width, double height, double focal_length) {
   using cv::Mat;
   using cv::Mat_;

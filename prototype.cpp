@@ -24,7 +24,7 @@ using namespace cv;
 #define N_THREADS 12
 #define PATH_FILE "aprs.csv"
 
-void prototype::test_effective_resolution() {
+void prototype::test_effective_resolution(learn_correct::Params params) {
   using cv::Mat;
   using std::cerr;
   using std::endl;
@@ -33,10 +33,10 @@ void prototype::test_effective_resolution() {
   int width_px = 1360;
   int height_px = 1024;
   // metrics: meters
-  double pixel_sep = 0.0000065;
+  double pixel_sep = params.pixel_sep;
   double width = width_px * pixel_sep;
   double height = height_px * pixel_sep;
-  double focal_length = 0.012;
+  double focal_length = params.focal_length;
 
   // FIXME choose alt, pitch, and roll randomly
   double alt = 1.3;
@@ -52,14 +52,14 @@ void prototype::test_effective_resolution() {
   for(int e = 1; e < 6; e++) {
     // calculate downscaled resolution
     int k = pow(2,e); // 2^e
-    int w = width_px / k;
-    int h = height_px / k;
+    int w = 256 / k;
+    int h = 256 / k;
     // compute distance map at downscaled resolution
     Mat Dd = Mat::zeros(h, w, CV_32F);
     interp::distance_map(Dd, alt, pitch, roll, width, height, focal_length);
     // upscale using high-quality interpolation
     Mat Du;
-    cv::resize(Dd, Du, D.size(), 0, 0, CV_INTER_CUBIC);
+    cv::resize(Dd, Du, D.size(), 0, 0, CV_INTER_LANCZOS4);
     Mat DuD = cv::abs(Du - D);
     double mindiff, maxdiff;
     cv::minMaxLoc(DuD, &mindiff, &maxdiff);

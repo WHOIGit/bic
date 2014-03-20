@@ -32,6 +32,9 @@ double compute_missing_alt(Params *params, double alt, cv::Mat cfa_LR, std::stri
   if(alt > 0 && alt < MAX_ALTITUDE) {
     return alt;
   }
+  // if images aren't stereo, we can't be doing this
+  if(!params->stereo)
+    throw std::runtime_error("cannot compute parallax from single-camera image");
   // compute from parallax
   // pull green channel
   Mat G;
@@ -109,10 +112,14 @@ void correct_task(Params *params, MultiLightfield *model, string inpath, double 
     // now smooth the average
     int h = average.size().height;
     int w = average.size().width;
-    Mat left = Mat(average,Rect(0,0,w/2,h));
-    Mat right = Mat(average,Rect(w/2,0,w/2,h));
-    cfa_smooth(left,left,params->lightmap_smoothing);
-    cfa_smooth(right,right,params->lightmap_smoothing);
+    if(params->stereo) {
+      Mat left = Mat(average,Rect(0,0,w/2,h));
+      Mat right = Mat(average,Rect(w/2,0,w/2,h));
+      cfa_smooth(left,left,params->lightmap_smoothing);
+      cfa_smooth(right,right,params->lightmap_smoothing);
+    } else {
+      cfa_smooth(cfa_LR,cfa_LR,params->lightmap_smoothing);
+    }
     cerr << "SMOOTHED lightmap" << endl;
     illum::correct(cfa_LR, cfa_LR, average); // correct it
     cerr << format("DEMOSAICING %s") % inpath << endl;

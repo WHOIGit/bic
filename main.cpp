@@ -32,7 +32,8 @@ int main(int argc, char **argv) {
     (OPT_ABBREV(OPT_MIN_BRIGHTNESS,"m"),po::value<double>()->default_value(0.05),"minimum brightness of lightmap (0-1)")
     (OPT_ABBREV(OPT_MAX_BRIGHTNESS,"M"),po::value<double>()->default_value(0.7),"maximum brightness of lightmap (0-1)")
     (OPT_ABBREV(OPT_INPUT,"i"),po::value<string>()->default_value("-"),"input file (default stdin, or use - to indicate stdin)")
-    (OPT_ABBREV(OPT_CREATE_DIRECTORIES,"d"),po::value<bool>()->default_value(true),"create output directories if they don't exist (default true)")
+    (OPT_ABBREV(OPT_CREATE_DIRECTORIES,"d"),po::value<bool>()->default_value(true),"create output directories if they don't exist")
+    (OPT_ABBREV(OPT_STEREO,"S"),po::value<bool>()->default_value(true),"treat images as side-by-side stereo pairs")
     ;
   po::variables_map options;
   Params params;
@@ -67,7 +68,7 @@ int main(int argc, char **argv) {
       } else if(command=="correct") {
 	learn_correct::correct(params);
       } else if(command=="res") {
-	prototype::test_effective_resolution();
+	prototype::test_effective_resolution(params);
       } else if(command=="flat") {
 	prototype::test_flatness(params);
       } else {

@@ -22,6 +22,7 @@
 #define OPT_MIN_BRIGHTNESS "min-brightness" // min brightness of lightmap (0-1)
 #define OPT_MAX_BRIGHTNESS "max-brightness" // max brightness of lightmap (0-1)
 #define OPT_CREATE_DIRECTORIES "create-directories" // whether to create nonexistent output directories
+#define OPT_STEREO "stereo" // whether images are stereo pairs
 
 namespace po = boost::program_options;
 
@@ -31,8 +32,8 @@ namespace po = boost::program_options;
  * benthic vehicle (HabCam V4). Several assumptions are made by this
  * application:
  *
- * - input images are side-by-side RAW stereo pairs in 16-bit TIFF format
- * - desired output is color and illumination-corrected stereo pairs in 8-bit PNG format
+ * - input images are RAW images in 16-bit TIFF format, either single-frame or stereo pairs
+ * - desired output is color and illumination-corrected images in 8-bit PNG format
  * - input images are in locally-accessible storage
  * - output images will be written to a locally-accessible storage
  *
@@ -88,6 +89,8 @@ namespace learn_correct {
     double max_brightness; // max brightness of lightmap
     /** Whether to create output directories if they do not exist */
     bool create_directories;
+    /** Whether to treat images as side-by-side stereo pairs */
+    bool stereo;
     /**
      * Validate parameters. Checks for obviously invalid parameters
      * such as negative focal lengths, min_brightness > max_brightness,
@@ -157,6 +160,7 @@ namespace learn_correct {
       min_brightness = options[OPT_MIN_BRIGHTNESS].as<double>();
       max_brightness = options[OPT_MAX_BRIGHTNESS].as<double>();
       create_directories = options[OPT_CREATE_DIRECTORIES].as<bool>();
+      stereo = options[OPT_STEREO].as<bool>();
       if(_validate)
 	validate();
     }
@@ -183,6 +187,7 @@ namespace learn_correct {
       strm << OPT_MIN_BRIGHTNESS << " = " << p.min_brightness << endl;
       strm << OPT_MAX_BRIGHTNESS << " = " << p.max_brightness << endl;
       strm << OPT_CREATE_DIRECTORIES << " = " << p.create_directories << endl;
+      strm << OPT_STEREO << " = " << p.stereo << endl;
       return strm;
     }
   };
