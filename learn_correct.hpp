@@ -24,6 +24,7 @@
 #define OPT_CREATE_DIRECTORIES "create-directories" // whether to create nonexistent output directories
 #define OPT_STEREO "stereo" // whether images are stereo pairs
 #define OPT_UPDATE "update" // whether to load lightmap
+#define OPT_ALT_FROM_PARALLAX "alt-parallax" // whether to compute altitude from parallax
 
 namespace po = boost::program_options;
 
@@ -94,6 +95,8 @@ namespace learn_correct {
     bool stereo;
     /** Whether to load lightmap prior to learning */
     bool update;
+    /** Whether to compute altitude from parallax */
+    bool alt_from_parallax;
     /**
      * Validate parameters. Checks for obviously invalid parameters
      * such as negative focal lengths, min_brightness > max_brightness,
@@ -136,6 +139,8 @@ namespace learn_correct {
 	throw std::logic_error("max brightness must be between 0 and 1");
       if(min_brightness > max_brightness)
 	throw std::logic_error("min brightness is < max brightness");
+      if(!stereo && alt_from_parallax)
+	throw std::logic_error("cannot compute altitude from parallax without stereo pairs");
     }
     Params() { }
     /**
@@ -165,6 +170,7 @@ namespace learn_correct {
       create_directories = options[OPT_CREATE_DIRECTORIES].as<bool>();
       stereo = options[OPT_STEREO].as<bool>();
       update = options[OPT_UPDATE].as<bool>();
+      alt_from_parallax = options[OPT_ALT_FROM_PARALLAX].as<bool>();
       if(_validate)
 	validate();
     }
@@ -193,6 +199,7 @@ namespace learn_correct {
       strm << OPT_CREATE_DIRECTORIES << " = " << p.create_directories << endl;
       strm << OPT_STEREO << " = " << p.stereo << endl;
       strm << OPT_UPDATE << " = " << p.update << endl;
+      strm << OPT_ALT_FROM_PARALLAX << " = " << p.alt_from_parallax << endl;
       return strm;
     }
   };

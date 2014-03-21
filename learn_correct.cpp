@@ -29,12 +29,8 @@ double compute_missing_alt(Params *params, double alt, cv::Mat cfa_LR, std::stri
   using cv::Mat;
   using boost::format;
   // if altitude is good, don't recompute it
-  if(alt > 0 && alt < MAX_ALTITUDE) {
+  if(!params->alt_from_parallax && alt > 0 && alt < MAX_ALTITUDE)
     return alt;
-  }
-  // if images aren't stereo, we can't be doing this
-  if(!params->stereo)
-    throw std::runtime_error("cannot compute parallax from single-camera image");
   // compute from parallax
   // pull green channel
   Mat G;
@@ -60,7 +56,7 @@ void learn_task(Params *params, MultiLightfield *model, string inpath, double al
   cerr << nounitbuf;
   // get the input pathname
   try  {
-    cerr << format("POPPED %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll << endl;
+    cerr << format("START LEARN %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll << endl;
     // read the image (this can be done in parallel)
     Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
     if(!cfa_LR.data)
@@ -71,7 +67,7 @@ void learn_task(Params *params, MultiLightfield *model, string inpath, double al
     // if altitude is out of range, compute from parallax
     alt = compute_missing_alt(params, alt, cfa_LR, inpath);
     model->addImage(cfa_LR, alt, pitch, roll);
-    cerr << format("ADDED %s") % inpath << endl;
+    cerr << format("LEARNED %s") % inpath << endl;
   } catch(std::runtime_error const &e) {
     cerr << "ERROR learning " << inpath << ": " << e.what() << endl;
   } catch(std::exception) {
@@ -86,7 +82,7 @@ void correct_task(Params *params, MultiLightfield *model, string inpath, double 
   using boost::algorithm::ends_with;
   cerr << nounitbuf;
   try {
-    cerr << format("POPPED %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll << endl;
+    cerr << format("START CORRECT %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll << endl;
     // make sure output path ends with ".png"
     string lop = outpath;
     boost::to_lower(lop);
