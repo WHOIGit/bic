@@ -23,6 +23,7 @@
 #define OPT_MAX_BRIGHTNESS "max-brightness" // max brightness of lightmap (0-1)
 #define OPT_CREATE_DIRECTORIES "create-directories" // whether to create nonexistent output directories
 #define OPT_STEREO "stereo" // whether images are stereo pairs
+#define OPT_UPDATE "update" // whether to load lightmap
 
 namespace po = boost::program_options;
 
@@ -91,6 +92,8 @@ namespace learn_correct {
     bool create_directories;
     /** Whether to treat images as side-by-side stereo pairs */
     bool stereo;
+    /** Whether to load lightmap prior to learning */
+    bool update;
     /**
      * Validate parameters. Checks for obviously invalid parameters
      * such as negative focal lengths, min_brightness > max_brightness,
@@ -161,6 +164,7 @@ namespace learn_correct {
       max_brightness = options[OPT_MAX_BRIGHTNESS].as<double>();
       create_directories = options[OPT_CREATE_DIRECTORIES].as<bool>();
       stereo = options[OPT_STEREO].as<bool>();
+      update = options[OPT_UPDATE].as<bool>();
       if(_validate)
 	validate();
     }
@@ -188,6 +192,7 @@ namespace learn_correct {
       strm << OPT_MAX_BRIGHTNESS << " = " << p.max_brightness << endl;
       strm << OPT_CREATE_DIRECTORIES << " = " << p.create_directories << endl;
       strm << OPT_STEREO << " = " << p.stereo << endl;
+      strm << OPT_UPDATE << " = " << p.update << endl;
       return strm;
     }
   };

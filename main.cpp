@@ -34,6 +34,7 @@ int main(int argc, char **argv) {
     (OPT_ABBREV(OPT_INPUT,"i"),po::value<string>()->default_value("-"),"input file (default stdin, or use - to indicate stdin)")
     (OPT_ABBREV(OPT_CREATE_DIRECTORIES,"d"),po::value<bool>()->default_value(true),"create output directories if they don't exist")
     (OPT_ABBREV(OPT_STEREO,"S"),po::value<bool>()->default_value(true),"treat images as side-by-side stereo pairs")
+    (OPT_ABBREV(OPT_UPDATE,"u"),po::value<bool>()->default_value(false),"update existing lightmap instead of creating new one")
     ;
   po::variables_map options;
   Params params;

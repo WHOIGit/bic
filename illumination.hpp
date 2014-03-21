@@ -405,8 +405,9 @@ public:
    * a directory that wasn't populated using the save method.
    *
    * @param outdir the output directory where the lightfield is stored
+   * @return number of slices loaded
    */
-  void load(string outdir) {
+  int load(string outdir) {
     int loaded = 0;
     for(int count = 0; count < 1000; ++count) {
       std::stringstream inpaths;
@@ -419,7 +420,6 @@ public:
 	loaded++;
       }
     }
-    if(loaded == 0)
-      throw std::runtime_error("no lightmap slices found");
+    return loaded;
   }
 };

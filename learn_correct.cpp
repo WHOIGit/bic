@@ -151,27 +151,37 @@ std::istream* learn_correct::get_input(learn_correct::Params p) {
   }
 }
 
-// learn phase
-void learn_correct::learn(learn_correct::Params p) {
+void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
+  using learn_correct::Task;
   // before any OpenCV operations are done, set global error flag
   cv::setBreakOnError(true);
   // ersatz logging setup
   using boost::format;
   cerr << nounitbuf;
-  // before we begin, make sure we can write to the output directory by attempting
-  // to write a parameter file
-  fs::path outdir(p.lightmap_dir);
-  if(p.create_directories)
-    fs::create_directories(outdir);
-  if(!fs::exists(outdir))
-    throw std::runtime_error("output directory does not exist");
-  fs::path paramfile = outdir / "params.txt";
-  ofstream pout(paramfile.string().c_str());
-  if(!(pout << p)) // write parameters to parameter file
-    throw std::runtime_error("failed to write parameter file");
-  pout.close();
-  // construct an empty lightfield model
+  if(learn) {
+    // before we begin, make sure we can write to the output directory by attempting
+    // to write a parameter file
+    fs::path outdir(p.lightmap_dir);
+    if(p.create_directories)
+      fs::create_directories(outdir);
+    if(!fs::exists(outdir))
+      throw std::runtime_error("output directory does not exist");
+    fs::path paramfile = outdir / "params.txt";
+    ofstream pout(paramfile.string().c_str());
+    if(!(pout << p)) // write parameters to parameter file
+      throw std::runtime_error("failed to write parameter file");
+    pout.close();
+  }
+  // construct an empty lightfield model based on parameters
   illum::MultiLightfield model(p.alt_spacing, p.focal_length, p.pixel_sep);
+  // load model
+  if(correct || (learn && p.update)) {
+    cerr << format("LOADING model from %s...") % p.lightmap_dir << endl;
+    int loaded = model.load(p.lightmap_dir);
+    if(!learn && !loaded)
+      throw std::runtime_error("lightmap is empty, cannot correct without training");
+    cerr << format("LOADED model from %s") % p.lightmap_dir << endl;
+  }
   // post all work
   boost::asio::io_service io_service;
   boost::thread_group workers;
@@ -190,8 +200,14 @@ void learn_correct::learn(learn_correct::Params p) {
     try {
       Task task = Task(line);
       task.validate();
-      io_service.post(boost::bind(learn_task, &p, &model, task.inpath, task.alt, task.pitch, task.roll));
-      cerr << format("PUSHED LEARN %s") % task.inpath << endl;
+      if(learn) {
+	io_service.post(boost::bind(learn_task, &p, &model, task.inpath, task.alt, task.pitch, task.roll));
+	cerr << format("PUSHED LEARN %s") % task.inpath << endl;
+      }
+      if(correct) {
+	io_service.post(boost::bind(correct_task, &p, &model, task.inpath, task.alt, task.pitch, task.roll, task.outpath));
+	cerr << format("PUSHED CORRECT %s") % task.inpath << endl;
+      }
     } catch(std::runtime_error const &e) {
       cerr << format("ERROR parsing input metadata: %s") % e.what() << endl;
     } catch(std::exception) {
@@ -202,114 +218,26 @@ void learn_correct::learn(learn_correct::Params p) {
   work.reset();
   // now run all pending jobs to completion
   workers.join_all();
-  cerr << "SUCCESS learn phase" << endl;
+  cerr << "SUCCESS" << endl;
 
   // we know output directory already exists and can be written to
-  model.save(p.lightmap_dir);
-  cerr << "SAVED model" << endl;
+  if(learn) {
+    cerr << format("SAVING model in %s...") % p.lightmap_dir << endl;
+    model.save(p.lightmap_dir);
+    cerr << format("SAVED model in %s") % p.lightmap_dir << endl;
+  }
+}
+
+// learn phase
+void learn_correct::learn(learn_correct::Params p) {
+  do_learn_correct(p, true, false);
 }
 
 void learn_correct::correct(learn_correct::Params p) {
-  // before any OpenCV operations are done, set global error flag
-  cv::setBreakOnError(true);
-  using boost::format;
-  cerr << nounitbuf;
-  // load model
-  cerr << "LOADING model..." << endl;
-  illum::MultiLightfield model;
-  model.load(p.lightmap_dir);
-  cerr << "LOADED model" << endl;
-  // post all work
-  boost::asio::io_service io_service;
-  // use the work object to keep threads alive before jobs are posted
-  // use auto_ptr so we can indicate that no more jobs will be posted
-  auto_ptr<boost::asio::io_service::work> work(new boost::asio::io_service::work(io_service));
-  // start a thread pool
-  boost::thread_group workers;
-  for(int i = 0; i < p.n_threads; i++) {
-    workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
-  }
-  // post jobs
-  istream* csv_in = get_input(p);
-  string line;
-  while(getline(*csv_in,line)) { // read pathames from a file
-    try {
-      Task task = Task(line);
-      task.validate();
-      io_service.post(boost::bind(correct_task, &p, &model, task.inpath, task.alt, task.pitch, task.roll, task.outpath));
-      cerr << format("PUSHED CORRECT %s") % task.inpath << endl;
-    } catch(std::runtime_error const &e) {
-      cerr << format("ERROR parsing input metadata: %s") % e.what() << endl;
-    } catch(std::exception) {
-      cerr << "ERROR parsing input metadata" << endl;
-    }
-  }
-  // destroy the work object to indicate that there are no more jobs
-  work.reset();
-  // now run all pending jobs to completion
-  workers.join_all();
-  // we're done
-  cerr << "SUCCESS correct phase" << endl;
+  do_learn_correct(p, false, true);
 }
 
 // adaptive (learn + correct)
 void learn_correct::adaptive(learn_correct::Params p) {
-  // FIXME massive tiles here.
-  // before any OpenCV operations are done, set global error flag
-  cv::setBreakOnError(true);
-  // ersatz logging setup
-  using boost::format;
-  cerr << nounitbuf;
-  // before we begin, make sure we can write to the output directory by attempting
-  // to write a parameter file
-  fs::path outdir(p.lightmap_dir);
-  if(p.create_directories)
-    fs::create_directories(outdir);
-  if(!fs::exists(outdir))
-    throw std::runtime_error("output directory does not exist");
-  fs::path paramfile = outdir / "params.txt";
-  ofstream pout(paramfile.string().c_str());
-  if(!(pout << p)) // write parameters to parameter file
-    throw std::runtime_error("failed to write parameter file");
-  pout.close();
-  // construct an empty lightfield model
-  illum::MultiLightfield model(p.alt_spacing, p.focal_length, p.pixel_sep);
-  // post all work
-  boost::asio::io_service io_service;
-  boost::thread_group workers;
-  // start up the work threads
-  // use the work object to keep threads alive before jobs are posted
-  // use auto_ptr so we can indicate that no more jobs will be posted
-  auto_ptr<boost::asio::io_service::work> work(new boost::asio::io_service::work(io_service));
-  // create the thread pool
-  for(int i = 0; i < p.n_threads; i++) {
-    workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
-  }
-  // now read input lines and post jobs
-  istream* csv_in = get_input(p);
-  string line;
-  while(getline(*csv_in,line)) { // read pathames from a file
-    try {
-      Task task = Task(line);
-      task.validate();
-      io_service.post(boost::bind(learn_task, &p, &model, task.inpath, task.alt, task.pitch, task.roll));
-      cerr << format("PUSHED LEARN %s") % task.inpath << endl;
-      io_service.post(boost::bind(correct_task, &p, &model, task.inpath, task.alt, task.pitch, task.roll, task.outpath));
-      cerr << format("PUSHED CORRECT %s") % task.inpath << endl;
-    } catch(std::runtime_error const &e) {
-      cerr << format("ERROR parsing input metadata: %s") % e.what() << endl;
-    } catch(std::exception) {
-      cerr << "ERROR parsing input metadata" << endl;
-    }
-  }
-  // destroy the work object to indicate that there are no more jobs
-  work.reset();
-  // now run all pending jobs to completion
-  workers.join_all();
-  cerr << "SUCCESS learn phase" << endl;
-
-  // we know output directory already exists and can be written to
-  model.save(p.lightmap_dir);
-  cerr << "SAVED model" << endl;
+  do_learn_correct(p, true, true);
 }
-
