@@ -261,9 +261,9 @@ namespace learn_correct {
       using boost::format;
       const double extreme_angle = M_PI * 45.0 / 180.0; // FIXME hardcoded
       if(pitch < -extreme_angle || pitch > extreme_angle)
-	throw std::runtime_error(str(format("ERROR pitch out of range: %.2f (radians)") % pitch));
+	throw std::runtime_error(str(format("pitch out of range: %.2f (radians)") % pitch));
       else if(roll < -extreme_angle || roll > extreme_angle)
-	throw std::runtime_error(str(format("ERROR roll out of range: %.2f (radians)") % roll));
+	throw std::runtime_error(str(format("roll out of range: %.2f (radians)") % roll));
     }
   };
 
