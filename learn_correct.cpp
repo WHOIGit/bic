@@ -56,7 +56,7 @@ double compute_missing_alt(Params *params, double alt, cv::Mat cfa_LR, std::stri
 }
 
 // the learn task adds an image to a multilightfield model
-void learn_task(Params *params, MultiLightfield *model, string inpath, double alt, double pitch, double roll) {
+void learn_task(Params *params, MultiLightfield *model, string inpath, double alt, double pitch, double roll, std::vector<std::string >* learned) {
   using cv::Mat;
   // get the input pathname
   try  {
@@ -71,6 +71,7 @@ void learn_task(Params *params, MultiLightfield *model, string inpath, double al
     // if altitude is out of range, compute from parallax
     alt = compute_missing_alt(params, alt, cfa_LR, inpath);
     model->addImage(cfa_LR, alt, pitch, roll);
+    learned->push_back(str(format("%s,%.2f,%.2f,%.2f") % inpath % alt % pitch % roll));
     log("LEARNED %s") % inpath;
   } catch(std::runtime_error const &e) {
     log_error("ERROR learning %s: %s") % inpath % e.what();
@@ -163,10 +164,17 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
     if(!fs::exists(outdir))
       throw std::runtime_error(str(format("output directory %s does not exist") % outdir));
     fs::path paramfile = outdir / "params.txt";
+    log("WRITING paramfile %s") % paramfile.string();
     std::ofstream pout(paramfile.string().c_str());
     if(!(pout << p)) // write parameters to parameter file
       throw std::runtime_error(str(format("failed to write parameter file to %s") % paramfile.c_str()));
     pout.close();
+    log("WROTE paramfile %s") % paramfile.string();
+    fs::path skipfile = outdir / "learned.csv";
+    log("WRITING empty skipfile %s") % skipfile.string();
+    std::ofstream sout(skipfile.string().c_str());
+    sout.close();
+    log("WROTE skipfile %s") % skipfile.string();
   }
   // construct an empty lightfield model based on parameters
   illum::MultiLightfield model(p.alt_spacing, p.focal_length, p.pixel_sep);
@@ -192,6 +200,8 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
     for(int i = 0; i < p.n_threads; i++) {
       workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
     }
+    // for learn phase keep track of which images were learned in this batch
+    std::vector<std::string > learned;
     // now read input lines and post jobs
     std::istream* csv_in = get_input(p);
     string line;
@@ -204,7 +214,7 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
 	task.validate();
 	if(learn) { // if learning
 	  // push a learn task on the queue
-	  io_service.post(boost::bind(learn_task, &p, &model, task.inpath, task.alt, task.pitch, task.roll));
+	  io_service.post(boost::bind(learn_task, &p, &model, task.inpath, task.alt, task.pitch, task.roll, &learned));
 	  log("QUEUED LEARN %s") % task.inpath;
 	}
 	if(correct) { // if correcting
@@ -226,7 +236,15 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
     // we know output directory already exists and can be written to
     if(learn && n_todo < p.batch_size) {
       log("CHECKPOINTING lightmap");
-      log("SAVING lightmap in %s...") % p.lightmap_dir;
+      // write skipfile
+      fs::path outdir(p.lightmap_dir);
+      fs::path skipfile = outdir / "learned.csv";
+      log("APPENDING to skipfile %s") % skipfile.string();
+      std::ofstream sout(skipfile.string().c_str(), std::ios::app);
+      for(std::vector<std::string>::const_iterator i = learned.begin(); i != learned.end(); ++i) {
+	sout << *i << std::endl;
+      }
+      log("SAVING lightmap in %s ...") % p.lightmap_dir;
       model.save(p.lightmap_dir);
       log("SAVED lightmap in %s") % p.lightmap_dir;
     }
