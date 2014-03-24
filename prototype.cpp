@@ -15,11 +15,14 @@
 #include "demosaic.hpp"
 #include "illumination.hpp"
 #include "interpolation.hpp"
+#include "logging.hpp"
 
 namespace fs = boost::filesystem;
 
 using namespace std;
 using namespace cv;
+
+using jlog::log;
 
 #define N_THREADS 12
 #define PATH_FILE "aprs.csv"
@@ -89,12 +92,12 @@ void in_flat_task(illum::Lightfield* frameAverage, boost::mutex* mutex, string i
     boost::lock_guard<boost::mutex> lock(*mutex);
     frameAverage->addImage(y_LR);
   }
-  cerr << "ADDED " << inpath << endl;
+  log("ADDED %s") % inpath;
 }
 
 void out_flat_task(learn_correct::Params* params, illum::Lightfield* R, illum::Lightfield* G, illum::Lightfield* B, boost::mutex* mutex, string inpath) {
   using boost::algorithm::ends_with;
-  cerr << "POPPED " << inpath << endl;
+  log("START %s") % inpath;
   try {
     string lop = inpath;
     boost::to_lower(lop);
@@ -105,7 +108,7 @@ void out_flat_task(learn_correct::Params* params, illum::Lightfield* R, illum::L
       cv::Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH); // read full bit depth
       if(cfa_LR.empty())
 	return;
-      cerr << "DEMOSAIC " << inpath << endl;
+      log("DEMOSAIC %s") % inpath;
       cv::Mat bgr_LR_16u = demosaic(cfa_LR, params->bayer_pattern) / 255; // debayer and scale intensity
       bgr_LR_16u.convertTo(bgr_LR, CV_8U);
     }
@@ -121,11 +124,11 @@ void out_flat_task(learn_correct::Params* params, illum::Lightfield* R, illum::L
       G->addImage(channels[1]);
       R->addImage(channels[2]);
     }
-    cerr << "ADDED " << inpath << endl;
+    log("ADDED %s") % inpath;
   } catch(std::runtime_error const &e) {
-    cerr << "ERROR adding " << inpath << ": " << e.what() << endl;
+    log("ERROR adding %s: %s") % inpath % e.what();
   } catch(std::exception) {
-    cerr << "ERROR adding " << inpath << endl;
+    log("ERROR adding %s") % inpath;
   }
 }
 
@@ -159,14 +162,14 @@ void prototype::test_flatness(learn_correct::Params params) {
       string outpath = line;
       if(fs::exists(outpath)) {
 	io_service.post(boost::bind(out_flat_task, &params, &R, &G, &B, &correctMutex, outpath));
-	cerr << "PUSHED " << outpath << endl;
+	log("QUEUED %s") % outpath;
       } else {
-	cerr << "WARNING: can't find " << outpath << endl;
+	log("WARNING: can't find %s") % outpath;
       }
     } catch(std::runtime_error const &e) {
-      cerr << format("ERROR parsing input metadata: %s") % e.what() << endl;
+      log("ERROR parsing input metadata: %s") % e.what();
     } catch(std::exception) {
-      cerr << "ERROR parsing input metadata" << endl;
+      log("ERROR parsing input metadata");
     }
   }
   // destroy the work object to indicate that there are no more jobs

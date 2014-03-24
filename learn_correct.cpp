@@ -15,6 +15,7 @@
 #include "demosaic.hpp"
 #include "illumination.hpp"
 #include "interpolation.hpp"
+#include "logging.hpp"
 
 namespace fs = boost::filesystem;
 
@@ -23,6 +24,7 @@ using namespace cv;
 
 using illum::MultiLightfield;
 using learn_correct::Params;
+using jlog::log;
 
 double compute_missing_alt(Params *params, double alt, cv::Mat cfa_LR, std::string inpath) {
   using stereo::align;
@@ -46,7 +48,7 @@ double compute_missing_alt(Params *params, double alt, cv::Mat cfa_LR, std::stri
   // convert to meters
   alt = (params->camera_sep * params->focal_length * H2O_ADJUSTMENT) / (x * params->pixel_sep);
   // log what just happened
-  cerr << format("PARALLAX altitude of %s is %.2f") % inpath % alt << endl;
+  log("PARALLAX altitude of %s is %.2f") % inpath % alt;
   return alt;
 }
 
@@ -56,22 +58,22 @@ void learn_task(Params *params, MultiLightfield *model, string inpath, double al
   cerr << nounitbuf;
   // get the input pathname
   try  {
-    cerr << format("START LEARN %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll << endl;
+    log("START LEARN %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll;
     // read the image (this can be done in parallel)
     Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
     if(!cfa_LR.data)
       throw std::runtime_error("unable to read image file");
     if(cfa_LR.type() != CV_16U)
       throw std::runtime_error("image is not 16-bit grayscale");
-    cerr << format("READ %s") % inpath << endl;
+    log("READ %s") % inpath;
     // if altitude is out of range, compute from parallax
     alt = compute_missing_alt(params, alt, cfa_LR, inpath);
     model->addImage(cfa_LR, alt, pitch, roll);
-    cerr << format("LEARNED %s") % inpath << endl;
+    log("LEARNED %s") % inpath;
   } catch(std::runtime_error const &e) {
-    cerr << "ERROR learning " << inpath << ": " << e.what() << endl;
+    log("ERROR learning %s: %s") % inpath % e.what();
   } catch(std::exception) {
-    cerr << "ERROR learning " << inpath << endl;
+    log("ERROR learning %s") % inpath;
   }
 }
 
@@ -82,7 +84,7 @@ void correct_task(Params *params, MultiLightfield *model, string inpath, double 
   using boost::algorithm::ends_with;
   cerr << nounitbuf;
   try {
-    cerr << format("START CORRECT %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll << endl;
+    log("START CORRECT %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll;
     // make sure output path ends with ".png"
     string lop = outpath;
     boost::to_lower(lop);
@@ -116,9 +118,9 @@ void correct_task(Params *params, MultiLightfield *model, string inpath, double 
     } else {
       cfa_smooth(cfa_LR,cfa_LR,params->lightmap_smoothing);
     }
-    cerr << "SMOOTHED lightmap" << endl;
+    log("SMOOTHED lightmap");
     illum::correct(cfa_LR, cfa_LR, average); // correct it
-    cerr << format("DEMOSAICING %s") % inpath << endl;
+    log("DEMOSAICING %s") % inpath;
     // demosaic it
     Mat rgb_LR = demosaic(cfa_LR,params->bayer_pattern);
     // brightness and contrast parameters
@@ -129,13 +131,13 @@ void correct_task(Params *params, MultiLightfield *model, string inpath, double 
     rgb_LR = rgb_LR * (255.0 / (65535.0 * (max - min))) - (min * 255.0);
     rgb_LR.convertTo(rgb_LR_8u, CV_8U);
     // now write the output image
-    cerr << format("SAVE RGB to %s") % outpath << endl;
+    log("SAVE RGB to %s") % outpath;
     if(!imwrite(outpath, rgb_LR_8u))
       throw std::runtime_error("unable to write output image");
   } catch(std::runtime_error const &e) {
-    cerr << "ERROR correcting " << inpath << ": " << e.what() << endl;
+    log("ERROR correcting %s: %s") % inpath % e.what();
   } catch(std::exception) {
-    cerr << "ERROR correcting " << inpath << endl;
+    log("ERROR correcting %s") % inpath;
   }
 }
 
@@ -172,11 +174,11 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
   illum::MultiLightfield model(p.alt_spacing, p.focal_length, p.pixel_sep);
   // load model
   if(correct || (learn && p.update)) {
-    cerr << format("LOADING model from %s...") % p.lightmap_dir << endl;
+    log("LOADING model from %s...") % p.lightmap_dir;
     int loaded = model.load(p.lightmap_dir);
     if(!learn && !loaded)
       throw std::runtime_error("lightmap is empty, cannot correct without training");
-    cerr << format("LOADED model from %s") % p.lightmap_dir << endl;
+    log("LOADED model from %s") % p.lightmap_dir;
   }
   // post all work
   boost::asio::io_service io_service;
@@ -201,30 +203,30 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
       if(learn) { // if learning
 	// push a learn task on the queue
 	io_service.post(boost::bind(learn_task, &p, &model, task.inpath, task.alt, task.pitch, task.roll));
-	cerr << format("PUSHED LEARN %s") % task.inpath << endl;
+	log("QUEUED LEARN %s") % task.inpath;
       }
       if(correct) { // if correcting
 	// push a correct task on the queue
 	io_service.post(boost::bind(correct_task, &p, &model, task.inpath, task.alt, task.pitch, task.roll, task.outpath));
-	cerr << format("PUSHED CORRECT %s") % task.inpath << endl;
+	log("QUEUED CORRECT %s") % task.inpath;
       }
     } catch(std::runtime_error const &e) {
-      cerr << format("ERROR parsing input metadata: %s") % e.what() << endl;
+      log("ERROR parsing input metadata: %s") % e.what();
     } catch(std::exception) {
-      cerr << "ERROR parsing input metadata" << endl;
+      log("ERROR parsing input metadata");
     }
   }
   // destroy the work object to indicate that there are no more jobs
   work.reset();
   // now run all pending jobs to completion
   workers.join_all();
-  cerr << "SUCCESS" << endl;
+  log("SUCCESS");
 
   // we know output directory already exists and can be written to
   if(learn) {
-    cerr << format("SAVING model in %s...") % p.lightmap_dir << endl;
+    log("SAVING model in %s...") % p.lightmap_dir;
     model.save(p.lightmap_dir);
-    cerr << format("SAVED model in %s") % p.lightmap_dir << endl;
+    log("SAVED model in %s") % p.lightmap_dir;
   }
 }
 
