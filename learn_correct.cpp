@@ -155,26 +155,30 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
   using learn_correct::Task;
   // before any OpenCV operations are done, set global error flag
   cv::setBreakOnError(true);
+  // paths
+  fs::path outdir(p.lightmap_dir);
+  fs::path paramfile = outdir / "params.txt";
+  fs::path skipfile = outdir / "learned.csv";
   if(learn) {
     // before we begin, make sure we can write to the output directory by attempting
     // to write a parameter file
-    fs::path outdir(p.lightmap_dir);
     if(p.create_directories)
       fs::create_directories(outdir);
     if(!fs::exists(outdir))
       throw std::runtime_error(str(format("output directory %s does not exist") % outdir));
-    fs::path paramfile = outdir / "params.txt";
     log("WRITING paramfile %s") % paramfile.string();
     std::ofstream pout(paramfile.string().c_str());
     if(!(pout << p)) // write parameters to parameter file
       throw std::runtime_error(str(format("failed to write parameter file to %s") % paramfile.c_str()));
     pout.close();
     log("WROTE paramfile %s") % paramfile.string();
-    fs::path skipfile = outdir / "learned.csv";
-    log("WRITING empty skipfile %s") % skipfile.string();
-    std::ofstream sout(skipfile.string().c_str());
-    sout.close();
-    log("WROTE skipfile %s") % skipfile.string();
+    if(!p.update) {
+      log("WRITING empty skipfile %s") % skipfile.string();
+      std::ofstream sout(skipfile.string().c_str());
+      sout.close();
+      log("WROTE skipfile %s") % skipfile.string();
+    } else {
+    }
   }
   // construct an empty lightfield model based on parameters
   illum::MultiLightfield model(p.alt_spacing, p.focal_length, p.pixel_sep);
@@ -185,6 +189,19 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
     if(!learn && !loaded)
       throw std::runtime_error(str(format("lightmap in %s is empty, cannot correct without training") % p.lightmap_dir));
     log("LOADED model from %s") % p.lightmap_dir;
+  }
+  // if we're updating,
+  std::set<std::string > skip;
+  if(learn && p.update) {
+    typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
+    log("READING skipfile %s") % skipfile.string();
+    std::ifstream sin(skipfile.string().c_str());
+    string line;
+    while(getline(sin,line)) {
+      Tokenizer tok(line);
+      string infile = *tok.begin();
+      skip.insert(infile); // filename is first item in CSV record
+    }
   }
   // now do a chunk of work, checkpoint, and continue
   int n_todo = 0;
@@ -213,9 +230,14 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
 	// check that the task is valid
 	task.validate();
 	if(learn) { // if learning
-	  // push a learn task on the queue
-	  io_service.post(boost::bind(learn_task, &p, &model, task.inpath, task.alt, task.pitch, task.roll, &learned));
-	  log("QUEUED LEARN %s") % task.inpath;
+	  // is the inpath on the skip list?
+	  if(skip.count(task.inpath) == 0) {
+	    // push a learn task on the queue
+	    io_service.post(boost::bind(learn_task, &p, &model, task.inpath, task.alt, task.pitch, task.roll, &learned));
+	    log("QUEUED LEARN %s") % task.inpath;
+	  } else {
+	    log("SKIPPING LEARN %s") % task.inpath;
+	  }
 	}
 	if(correct) { // if correcting
 	  // push a correct task on the queue
