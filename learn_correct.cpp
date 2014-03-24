@@ -25,11 +25,11 @@ using namespace cv;
 using illum::MultiLightfield;
 using learn_correct::Params;
 using jlog::log;
+using jlog::log_error;
 
 double compute_missing_alt(Params *params, double alt, cv::Mat cfa_LR, std::string inpath) {
   using stereo::align;
   using cv::Mat;
-  using boost::format;
   // if altitude is good, don't recompute it
   if(!params->alt_from_parallax && alt > 0 && alt < MAX_ALTITUDE)
     return alt;
@@ -54,8 +54,6 @@ double compute_missing_alt(Params *params, double alt, cv::Mat cfa_LR, std::stri
 
 // the learn task adds an image to a multilightfield model
 void learn_task(Params *params, MultiLightfield *model, string inpath, double alt, double pitch, double roll) {
-  using boost::format;
-  cerr << nounitbuf;
   // get the input pathname
   try  {
     log("START LEARN %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll;
@@ -71,18 +69,16 @@ void learn_task(Params *params, MultiLightfield *model, string inpath, double al
     model->addImage(cfa_LR, alt, pitch, roll);
     log("LEARNED %s") % inpath;
   } catch(std::runtime_error const &e) {
-    log("ERROR learning %s: %s") % inpath % e.what();
+    log_error("ERROR learning %s: %s") % inpath % e.what();
   } catch(std::exception) {
-    log("ERROR learning %s") % inpath;
+    log_error("ERROR learning %s") % inpath;
   }
 }
 
 // the correct task corrects images
 void correct_task(Params *params, MultiLightfield *model, string inpath, double alt, double pitch, double roll, string outpath) {
   using namespace std;
-  using boost::format;
   using boost::algorithm::ends_with;
-  cerr << nounitbuf;
   try {
     log("START CORRECT %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll;
     // make sure output path ends with ".png"
@@ -135,9 +131,9 @@ void correct_task(Params *params, MultiLightfield *model, string inpath, double 
     if(!imwrite(outpath, rgb_LR_8u))
       throw std::runtime_error("unable to write output image");
   } catch(std::runtime_error const &e) {
-    log("ERROR correcting %s: %s") % inpath % e.what();
+    log_error("ERROR correcting %s: %s") % inpath % e.what();
   } catch(std::exception) {
-    log("ERROR correcting %s") % inpath;
+    log_error("ERROR correcting %s") % inpath;
   }
 }
 
@@ -153,9 +149,6 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
   using learn_correct::Task;
   // before any OpenCV operations are done, set global error flag
   cv::setBreakOnError(true);
-  // ersatz logging setup
-  using boost::format;
-  cerr << nounitbuf;
   if(learn) {
     // before we begin, make sure we can write to the output directory by attempting
     // to write a parameter file
@@ -211,9 +204,9 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
 	log("QUEUED CORRECT %s") % task.inpath;
       }
     } catch(std::runtime_error const &e) {
-      log("ERROR parsing input metadata: %s") % e.what();
+      log_error("ERROR parsing input metadata: %s") % e.what();
     } catch(std::exception) {
-      log("ERROR parsing input metadata");
+      log_error("ERROR parsing input metadata");
     }
   }
   // destroy the work object to indicate that there are no more jobs

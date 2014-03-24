@@ -23,13 +23,17 @@ namespace jlog {
   };
   // adapted from http://stackoverflow.com/questions/1056411/how-to-pass-variable-number-of-arguments-to-printf-sprintf
   class formatted_log_t {
+  private:
+    std::ostream* os;
   public:
-    formatted_log_t(const char* msg) : fmt(msg) {}
+    formatted_log_t(const char* msg, std::ostream* _os=&std::cout) : fmt(msg) {
+      os=_os;
+    }
     ~formatted_log_t() {
       boost::mutex* mutex = log_mutex_ref::getInstance().get_mutex();
       { // protect stream from simultaneous output
 	boost::lock_guard<boost::mutex> lock(*mutex);
-	std::cerr << fmt << std::endl; // FIXME hardcoded destination stream
+	*os << fmt << std::endl;
       }
     }
     
@@ -42,4 +46,5 @@ namespace jlog {
     boost::format fmt;
   };
   formatted_log_t log(const char *msg);
+  formatted_log_t log_error(const char *msg);
 };

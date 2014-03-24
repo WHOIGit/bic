@@ -4,7 +4,6 @@
 #include <ios>
 #include <opencv2/opencv.hpp>
 #include <boost/thread.hpp>
-#include <boost/format.hpp>
 #include <boost/asio.hpp>
 #include <boost/tokenizer.hpp>
 #include <boost/filesystem.hpp>
@@ -23,6 +22,7 @@ using namespace std;
 using namespace cv;
 
 using jlog::log;
+using jlog::log_error;
 
 #define N_THREADS 12
 #define PATH_FILE "aprs.csv"
@@ -76,7 +76,7 @@ void prototype::test_effective_resolution(learn_correct::Params params) {
 }
 
 void in_flat_task(illum::Lightfield* frameAverage, boost::mutex* mutex, string inpath) {
-  cerr << "POPPED " << inpath << endl;
+  log("START %s") % inpath;
   cv::Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH); // read input image
   if(cfa_LR.empty()) {
     return;
@@ -126,9 +126,9 @@ void out_flat_task(learn_correct::Params* params, illum::Lightfield* R, illum::L
     }
     log("ADDED %s") % inpath;
   } catch(std::runtime_error const &e) {
-    log("ERROR adding %s: %s") % inpath % e.what();
+    log_error("ERROR adding %s: %s") % inpath % e.what();
   } catch(std::exception) {
-    log("ERROR adding %s") % inpath;
+    log_error("ERROR adding %s") % inpath;
   }
 }
 
@@ -136,9 +136,6 @@ void prototype::test_flatness(learn_correct::Params params) {
   using std::cerr;
   // before any OpenCV operations are done, set global error flag
   cv::setBreakOnError(true);
-  // ersatz logging setup
-  using boost::format;
-  cerr << nounitbuf;
   boost::mutex correctMutex;
   illum::Lightfield R;
   illum::Lightfield G;

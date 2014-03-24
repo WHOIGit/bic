@@ -54,8 +54,9 @@ int main(int argc, char **argv) {
     }
     // now set up parameters object
     params = Params(options,false);
-    cerr << params;
+    // write parameters to stdout
     params.validate();
+    cout << params;
   } catch(std::logic_error const &e) {
     cerr << "error: invalid parameter: " << e.what() << endl;
     cerr << copts << endl;
