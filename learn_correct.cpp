@@ -118,7 +118,7 @@ void correct_task(Params *params, MultiLightfield *model, string inpath, double 
     } else {
       cfa_smooth(cfa_LR,cfa_LR,params->lightmap_smoothing);
     }
-    log("SMOOTHED lightmap");
+    log("SMOOTHED lightmap for %s") % inpath;
     illum::correct(cfa_LR, cfa_LR, average); // correct it
     log("DEMOSAICING %s") % inpath;
     // demosaic it
@@ -131,7 +131,7 @@ void correct_task(Params *params, MultiLightfield *model, string inpath, double 
     rgb_LR = rgb_LR * (255.0 / (65535.0 * (max - min))) - (min * 255.0);
     rgb_LR.convertTo(rgb_LR_8u, CV_8U);
     // now write the output image
-    log("SAVE RGB to %s") % outpath;
+    log("SAVING corrected image to %s") % outpath;
     if(!imwrite(outpath, rgb_LR_8u))
       throw std::runtime_error(str(format("unable to write output image to %s") % outpath));
     log("CORRECTED %s") % inpath;
@@ -178,54 +178,60 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
       throw std::runtime_error(str(format("lightmap in %s is empty, cannot correct without training") % p.lightmap_dir));
     log("LOADED model from %s") % p.lightmap_dir;
   }
-  // post all work
-  boost::asio::io_service io_service;
-  boost::thread_group workers;
-  // start up the work threads
-  // use the work object to keep threads alive before jobs are posted
-  // use auto_ptr so we can indicate that no more jobs will be posted
-  std::auto_ptr<boost::asio::io_service::work> work(new boost::asio::io_service::work(io_service));
-  // create the thread pool
-  for(int i = 0; i < p.n_threads; i++) {
-    workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
-  }
-  // now read input lines and post jobs
-  std::istream* csv_in = get_input(p);
-  string line;
-  while(getline(*csv_in,line)) { // read pathames from a file
-    try {
-      // parse the input line and turn it into a Task object
-      Task task = Task(line);
-      // check that the task is valid
-      task.validate();
-      if(learn) { // if learning
-	// push a learn task on the queue
-	io_service.post(boost::bind(learn_task, &p, &model, task.inpath, task.alt, task.pitch, task.roll));
-	log("QUEUED LEARN %s") % task.inpath;
-      }
-      if(correct) { // if correcting
-	// push a correct task on the queue
-	io_service.post(boost::bind(correct_task, &p, &model, task.inpath, task.alt, task.pitch, task.roll, task.outpath));
-	log("QUEUED CORRECT %s") % task.inpath;
-      }
-    } catch(std::runtime_error const &e) {
-      log_error("ERROR parsing input metadata: %s: last line read was '%s'") % e.what() % line;
-    } catch(std::exception) {
-      log_error("ERROR parsing input metadata: last line read was '%s'") % line;
+  // now do a chunk of work, checkpoint, and continue
+  int n_todo = 0;
+  while(n_todo <= 0) {
+    // post all work
+    boost::asio::io_service io_service;
+    boost::thread_group workers;
+    // start up the work threads
+    // use the work object to keep threads alive before jobs are posted
+    // use auto_ptr so we can indicate that no more jobs will be posted
+    std::auto_ptr<boost::asio::io_service::work> work(new boost::asio::io_service::work(io_service));
+    // create the thread pool
+    for(int i = 0; i < p.n_threads; i++) {
+      workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
     }
-  }
-  // destroy the work object to indicate that there are no more jobs
-  work.reset();
-  // now run all pending jobs to completion
-  workers.join_all();
-  log("SUCCESS");
+    // now read input lines and post jobs
+    std::istream* csv_in = get_input(p);
+    string line;
+    n_todo = p.batch_size;
+    while(getline(*csv_in,line) && (!learn || n_todo--)) { // read pathames from a file
+      try {
+	// parse the input line and turn it into a Task object
+	Task task = Task(line);
+	// check that the task is valid
+	task.validate();
+	if(learn) { // if learning
+	  // push a learn task on the queue
+	  io_service.post(boost::bind(learn_task, &p, &model, task.inpath, task.alt, task.pitch, task.roll));
+	  log("QUEUED LEARN %s") % task.inpath;
+	}
+	if(correct) { // if correcting
+	  // push a correct task on the queue
+	  io_service.post(boost::bind(correct_task, &p, &model, task.inpath, task.alt, task.pitch, task.roll, task.outpath));
+	  log("QUEUED CORRECT %s") % task.inpath;
+	}
+      } catch(std::runtime_error const &e) {
+	log_error("ERROR parsing input metadata: %s: last line read was '%s'") % e.what() % line;
+      } catch(std::exception) {
+	log_error("ERROR parsing input metadata: last line read was '%s'") % line;
+      }
+    }
+    // destroy the work object to indicate that there are no more jobs
+    work.reset();
+    // now run all pending jobs to completion
+    workers.join_all();
 
-  // we know output directory already exists and can be written to
-  if(learn) {
-    log("SAVING model in %s...") % p.lightmap_dir;
-    model.save(p.lightmap_dir);
-    log("SAVED model in %s") % p.lightmap_dir;
-  }
+    // we know output directory already exists and can be written to
+    if(learn && n_todo < p.batch_size) {
+      log("CHECKPOINTING lightmap");
+      log("SAVING lightmap in %s...") % p.lightmap_dir;
+      model.save(p.lightmap_dir);
+      log("SAVED lightmap in %s") % p.lightmap_dir;
+    }
+  }// move on to next chunk
+  log("COMPLETE");
 }
 
 // learn phase

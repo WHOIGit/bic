@@ -11,7 +11,7 @@
  *
  * - the camera image plane is parallel to the substate when the vehicle
  * is at zero pitch and roll (e.g., yaw does not matter)
- * - the origin of pitch and roll is the focal point of the camera
+ * - the origin of pitch and roll is located somewhere between the two cameras
  * - pitch and roll are small enough that it does not matter in what order
  * the rotations are applied
  * 

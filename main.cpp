@@ -36,6 +36,7 @@ int main(int argc, char **argv) {
     (OPT_ABBREV(OPT_STEREO,"S"),po::value<bool>()->default_value(true),"treat images as side-by-side stereo pairs")
     (OPT_ABBREV(OPT_UPDATE,"u"),po::value<bool>()->default_value(false),"update existing lightmap instead of creating new one")
     (OPT_ABBREV(OPT_ALT_FROM_PARALLAX,"A"),po::value<bool>()->default_value(false),"ignore altitude in input metadata and compute from parallax")
+    (OPT_ABBREV(OPT_BATCH_SIZE,"B"),po::value<int>()->default_value(65535),"number of images to learn between checkpoints (learn phase)")
     ;
   po::variables_map options;
   Params params;

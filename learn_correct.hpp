@@ -25,6 +25,7 @@
 #define OPT_STEREO "stereo" // whether images are stereo pairs
 #define OPT_UPDATE "update" // whether to load lightmap
 #define OPT_ALT_FROM_PARALLAX "alt-parallax" // whether to compute altitude from parallax
+#define OPT_BATCH_SIZE "batch" // how many images to learn between checkpointing the lightmap
 
 namespace po = boost::program_options;
 
@@ -97,6 +98,8 @@ namespace learn_correct {
     bool update;
     /** Whether to compute altitude from parallax */
     bool alt_from_parallax;
+    /** Number of images to learn between checkpoints (learn phase) */
+    int batch_size;
     /**
      * Validate parameters. Checks for obviously invalid parameters
      * such as negative focal lengths, min_brightness > max_brightness,
@@ -141,6 +144,12 @@ namespace learn_correct {
 	throw std::logic_error("min brightness is < max brightness");
       if(!stereo && alt_from_parallax)
 	throw std::logic_error("cannot compute altitude from parallax without stereo pairs");
+      if(batch_size < 0)
+	throw std::logic_error("batch size negative");
+      if(batch_size < n_threads)
+	cerr << "warning: batch size " << batch_size << " less than thread count " << n_threads << endl;
+      if(batch_size < 200)
+	cerr << "warning: small batch size of " << batch_size << " will result in poor performance in learn phase" << endl;
     }
     Params() { }
     /**
@@ -171,6 +180,7 @@ namespace learn_correct {
       stereo = options[OPT_STEREO].as<bool>();
       update = options[OPT_UPDATE].as<bool>();
       alt_from_parallax = options[OPT_ALT_FROM_PARALLAX].as<bool>();
+      batch_size = options[OPT_BATCH_SIZE].as<int>();
       if(_validate)
 	validate();
     }
@@ -200,6 +210,7 @@ namespace learn_correct {
       strm << OPT_STEREO << " = " << p.stereo << endl;
       strm << OPT_UPDATE << " = " << p.update << endl;
       strm << OPT_ALT_FROM_PARALLAX << " = " << p.alt_from_parallax << endl;
+      strm << OPT_BATCH_SIZE << " = " << p.batch_size << endl;
       return strm;
     }
   };
