@@ -134,6 +134,7 @@ void correct_task(Params *params, MultiLightfield *model, string inpath, double 
     log("SAVE RGB to %s") % outpath;
     if(!imwrite(outpath, rgb_LR_8u))
       throw std::runtime_error(str(format("unable to write output image to %s") % outpath));
+    log("CORRECTED %s") % inpath;
   } catch(std::runtime_error const &e) {
     log_error("ERROR correcting %s: %s") % inpath % e.what();
   } catch(std::exception) {
