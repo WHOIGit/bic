@@ -194,13 +194,17 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
   string line;
   while(getline(*csv_in,line)) { // read pathames from a file
     try {
+      // parse the input line and turn it into a Task object
       Task task = Task(line);
+      // check that the task is valid
       task.validate();
-      if(learn) {
+      if(learn) { // if learning
+	// push a learn task on the queue
 	io_service.post(boost::bind(learn_task, &p, &model, task.inpath, task.alt, task.pitch, task.roll));
 	cerr << format("PUSHED LEARN %s") % task.inpath << endl;
       }
-      if(correct) {
+      if(correct) { // if correcting
+	// push a correct task on the queue
 	io_service.post(boost::bind(correct_task, &p, &model, task.inpath, task.alt, task.pitch, task.roll, task.outpath));
 	cerr << format("PUSHED CORRECT %s") % task.inpath << endl;
       }

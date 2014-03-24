@@ -130,6 +130,7 @@ void out_flat_task(learn_correct::Params* params, illum::Lightfield* R, illum::L
 }
 
 void prototype::test_flatness(learn_correct::Params params) {
+  using std::cerr;
   // before any OpenCV operations are done, set global error flag
   cv::setBreakOnError(true);
   // ersatz logging setup
@@ -173,10 +174,10 @@ void prototype::test_flatness(learn_correct::Params params) {
   // now run all pending jobs to completion
   workers.join_all();
 
-  std::cerr << "WRITING correct average R" << std::endl;
+  cerr << "WRITING correct average R" << std::endl;
   imwrite("avg_correct_R.tiff",R.getAverage());
-  std::cerr << "WRITING correct average G" << std::endl;
+  cerr << "WRITING correct average G" << std::endl;
   imwrite("avg_correct_G.tiff",G.getAverage());
-  std::cerr << "WRITING correct average B" << std::endl;
+  cerr << "WRITING correct average B" << std::endl;
   imwrite("avg_correct_B.tiff",B.getAverage());
 }
