@@ -26,6 +26,7 @@
 #define OPT_UPDATE "update" // whether to load lightmap
 #define OPT_ALT_FROM_PARALLAX "alt-parallax" // whether to compute altitude from parallax
 #define OPT_BATCH_SIZE "batch" // how many images to learn between checkpointing the lightmap
+#define OPT_SKIP_EXISTING "new" // whether to skip existing images
 
 namespace po = boost::program_options;
 
@@ -100,6 +101,8 @@ namespace learn_correct {
     bool alt_from_parallax;
     /** Number of images to learn between checkpoints (learn phase) */
     int batch_size;
+    /** Whether to skip processing existing images (correct phase) */
+    bool skip_existing;
     /**
      * Validate parameters. Checks for obviously invalid parameters
      * such as negative focal lengths, min_brightness > max_brightness,
@@ -181,6 +184,7 @@ namespace learn_correct {
       update = options[OPT_UPDATE].as<bool>();
       alt_from_parallax = options[OPT_ALT_FROM_PARALLAX].as<bool>();
       batch_size = options[OPT_BATCH_SIZE].as<int>();
+      skip_existing = options[OPT_SKIP_EXISTING].as<bool>();
       if(_validate)
 	validate();
     }
@@ -211,6 +215,7 @@ namespace learn_correct {
       strm << OPT_UPDATE << " = " << p.update << endl;
       strm << OPT_ALT_FROM_PARALLAX << " = " << p.alt_from_parallax << endl;
       strm << OPT_BATCH_SIZE << " = " << p.batch_size << endl;
+      strm << OPT_SKIP_EXISTING << " = " << p.skip_existing << endl;
       return strm;
     }
   };

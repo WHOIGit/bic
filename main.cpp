@@ -11,32 +11,32 @@ namespace po = boost::program_options;
 
 #define OPT_COMMAND "command"
 
-#define OPT_ABBREV(x,y) (std::string(x)+","+y).c_str()
+#define OPT(opt,abbrev,typ,def_val,doc) ((std::string(opt)+","+abbrev).c_str(),po::value<typ>()->default_value(def_val),doc)
 
 int main(int argc, char **argv) {
   using learn_correct::Params;
   // non-positional command line options
   po::options_description copts("Command line options");
   copts.add_options()
-    ("help,h","produce help message")
-    (OPT_ABBREV(OPT_COMMAND,"c"),po::value<string>(),"command to run")
-    (OPT_ABBREV(OPT_LIGHTMAP_DIR,"l"),po::value<string>()->default_value("/tmp"),"lightmap directory")
-    (OPT_ABBREV(OPT_BAYER_PATTERN,"b"),po::value<string>()->default_value("rggb"),"bayer pattern (e.g., rggb)")
-    (OPT_ABBREV(OPT_N_THREADS,"t"),po::value<int>()->default_value(0),"number of threads")
-    (OPT_ABBREV(OPT_ALT_SPACING,"a"),po::value<double>()->default_value(0.1),"distance between altitude bins (meters)")
-    (OPT_ABBREV(OPT_FOCAL_LENGTH,"f"),po::value<double>()->default_value(0.012),"effective focal length (meters)")
-    (OPT_ABBREV(OPT_PIXEL_SEP,"p"),po::value<double>()->default_value(0.00000645),"grid spacing of pixels on sensor (meters)")
-    (OPT_ABBREV(OPT_TEMPLATE_SIZE,"P"),po::value<int>()->default_value(64),"size of parallax matching template (pixels)")
-    (OPT_ABBREV(OPT_SMOOTHING,"s"),po::value<int>()->default_value(31),"size of lightmap smoothing kernel (pixels)")
-    (OPT_ABBREV(OPT_CAMERA_SEP,"C"),po::value<double>()->default_value(0.235),"stereo camera spacing (meters)")
-    (OPT_ABBREV(OPT_MIN_BRIGHTNESS,"m"),po::value<double>()->default_value(0.05),"minimum brightness of lightmap (0-1)")
-    (OPT_ABBREV(OPT_MAX_BRIGHTNESS,"M"),po::value<double>()->default_value(0.7),"maximum brightness of lightmap (0-1)")
-    (OPT_ABBREV(OPT_INPUT,"i"),po::value<string>()->default_value("-"),"input file (default stdin, or use - to indicate stdin)")
-    (OPT_ABBREV(OPT_CREATE_DIRECTORIES,"d"),po::value<bool>()->default_value(true),"create output directories if they don't exist")
-    (OPT_ABBREV(OPT_STEREO,"S"),po::value<bool>()->default_value(true),"treat images as side-by-side stereo pairs")
-    (OPT_ABBREV(OPT_UPDATE,"u"),po::value<bool>()->default_value(false),"update existing lightmap instead of creating new one")
-    (OPT_ABBREV(OPT_ALT_FROM_PARALLAX,"A"),po::value<bool>()->default_value(false),"ignore altitude in input metadata and compute from parallax")
-    (OPT_ABBREV(OPT_BATCH_SIZE,"B"),po::value<int>()->default_value(65535),"number of images to learn between checkpoints (learn phase)")
+    OPT(OPT_COMMAND,"c",string,"help","command to run")
+    OPT(OPT_LIGHTMAP_DIR,"l",string,"/tmp","lightmap directory")
+    OPT(OPT_BAYER_PATTERN,"b",string,"rggb","bayer pattern (e.g., rggb)")
+    OPT(OPT_N_THREADS,"t",int,0,"number of threads")
+    OPT(OPT_ALT_SPACING,"a",double,0.1,"distance between altitude bins (meters)")
+    OPT(OPT_FOCAL_LENGTH,"f",double,0.012,"effective focal length (meters)")
+    OPT(OPT_PIXEL_SEP,"p",double,0.00000645,"grid spacing of pixels on sensor (meters)")
+    OPT(OPT_TEMPLATE_SIZE,"P",int,64,"size of parallax matching template (pixels)")
+    OPT(OPT_SMOOTHING,"s",int,31,"size of lightmap smoothing kernel (pixels)")
+    OPT(OPT_CAMERA_SEP,"C",double,0.235,"stereo camera spacing (meters)")
+    OPT(OPT_MIN_BRIGHTNESS,"m",double,0.05,"minimum brightness of lightmap (0-1)")
+    OPT(OPT_MAX_BRIGHTNESS,"M",double,0.7,"maximum brightness of lightmap (0-1)")
+    OPT(OPT_INPUT,"i",string,"-","input file (default stdin, or use - to indicate stdin)")
+    OPT(OPT_CREATE_DIRECTORIES,"d",bool,true,"create output directories if they don't exist")
+    OPT(OPT_STEREO,"S",bool,true,"treat images as side-by-side stereo pairs")
+    OPT(OPT_UPDATE,"u",bool,false,"update existing lightmap instead of creating new one")
+    OPT(OPT_ALT_FROM_PARALLAX,"A",bool,false,"ignore altitude in input metadata and compute from parallax")
+    OPT(OPT_BATCH_SIZE,"B",int,65535,"number of images to learn between checkpoints (learn phase)")
+    OPT(OPT_SKIP_EXISTING,"n",bool,false,"skip existing images (correct phase)")
     ;
   po::variables_map options;
   Params params;
@@ -55,9 +55,6 @@ int main(int argc, char **argv) {
     }
     // now set up parameters object
     params = Params(options,false);
-    // write parameters to stdout
-    params.validate();
-    cout << params;
   } catch(std::logic_error const &e) {
     cerr << "error: invalid parameter: " << e.what() << endl;
     cerr << copts << endl;
@@ -66,6 +63,7 @@ int main(int argc, char **argv) {
   // take action
   if(options.count(OPT_COMMAND)) {
     string command = options[OPT_COMMAND].as<string>();
+    cout << params;
     try {
       if(command=="learn") {
 	learn_correct::learn(params);
@@ -77,8 +75,12 @@ int main(int argc, char **argv) {
 	prototype::test_effective_resolution(params);
       } else if(command=="flat") {
 	prototype::test_flatness(params);
-      } else {
+      } else if(command=="xoff") {
 	stereo::xoff_test(argc,argv);
+      } else if(command=="help") {
+	cout << copts << endl;
+      } else {
+	cerr << "ERROR unknown command " << command << endl;
       }
     } catch(std::runtime_error const &e) {
       cerr << "ERROR " << command << ": " << e.what() << endl;
@@ -86,6 +88,7 @@ int main(int argc, char **argv) {
       cerr << "ERROR " << command << endl;
     }
   } else {
-    cerr << "Error: no command specified";
+    cerr << "ERROR no command specified" << endl;
+    cerr << copts << endl;
   }
 }

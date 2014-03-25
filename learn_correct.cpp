@@ -194,8 +194,8 @@ void correct_task(WorkState* state, string inpath, double alt, double pitch, dou
   using cv::Mat;
   using boost::algorithm::ends_with;
   try {
-    log("START CORRECT %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll;
     Params* params = &state->params;
+    log("START CORRECT %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll;
     // make sure output path ends with ".png"
     string lop = outpath;
     boost::to_lower(lop);
@@ -207,6 +207,11 @@ void correct_task(WorkState* state, string inpath, double alt, double pitch, dou
     // now create output directory if necessary
     if(params->create_directories)
       fs::create_directories(outdir);
+    // if we're skipping existing images, check once again for existence
+    if(params->skip_existing && fs::exists(outp)) {
+      log("SKIPPING %s because %s exists") % inpath % outpath;
+      return;
+    }
     // proceed
     Mat cfa_LR = cv::imread(inpath, CV_LOAD_IMAGE_ANYDEPTH); // read input image
     if(!cfa_LR.data)
@@ -308,13 +313,17 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
 	    io_service.post(boost::bind(learn_task, &state, task.inpath, task.alt, task.pitch, task.roll));
 	    log("QUEUED LEARN %s") % task.inpath;
 	  } else {
-	    log("SKIPPING LEARN %s") % task.inpath;
+	    log("SKIPPED LEARN %s") % task.inpath;
 	  }
 	}
 	if(correct) { // if correcting
-	  // push a correct task on the queue
-	  io_service.post(boost::bind(correct_task, &state, task.inpath, task.alt, task.pitch, task.roll, task.outpath));
-	  log("QUEUED CORRECT %s") % task.inpath;
+	  if(p.skip_existing && fs::exists(task.outpath)) {
+	    log("SKIPPED CORRECT %s") % task.outpath;
+	  } else {
+	    // push a correct task on the queue
+	    io_service.post(boost::bind(correct_task, &state, task.inpath, task.alt, task.pitch, task.roll, task.outpath));
+	    log("QUEUED CORRECT %s") % task.inpath;
+	  }
 	}
       } catch(std::runtime_error const &e) {
 	log_error("ERROR parsing input metadata: %s: last line read was '%s'") % e.what() % line;
