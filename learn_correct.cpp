@@ -339,7 +339,32 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
     int n_learned_now = state.n_learned();
     // we know output directory already exists and can be written to
     if(learn && n_todo < p.batch_size && n_learned_now > n_learned_then) {
-      state.checkpoint();
+      // shuffle directories around
+      fs::path outd(p.lightmap_dir);
+      fs::path latest_checkpoint = outd / "latest";
+      fs::path prev_checkpoint = outd / "prev_checkpoint";
+      fs::path new_checkpoint = outd / "new_checkpoint";
+      // first write the new checkpoint
+      // if the directory exists, empty it first
+      if(fs::exists(new_checkpoint)) {
+	fs::remove_all(new_checkpoint);
+      }
+      // now write the new checkpoint
+      state.checkpoint(new_checkpoint.string());
+      // move "latest" checkpoint safely out of the way
+      if(fs::exists(latest_checkpoint)) {
+	log("CHECKPOINT moving old checkpoint to %s") % prev_checkpoint;
+	fs::rename(latest_checkpoint, prev_checkpoint);
+      }
+      // now move it into place
+      fs::rename(new_checkpoint, latest_checkpoint);
+      log("CHECKPOINT moved to %s") % latest_checkpoint;
+      // now remove previous checkpoint
+      if(fs::exists(prev_checkpoint)) {
+	log("CHECKPOINT deleting older %s ...") % prev_checkpoint;
+	fs::remove_all(prev_checkpoint);
+	log("CHECKPOINT deleted older %s") % prev_checkpoint;
+      }
     }
   }// move on to next chunk
   log("COMPLETE");
