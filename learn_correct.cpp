@@ -151,57 +151,116 @@ std::istream* learn_correct::get_input(learn_correct::Params p) {
   }
 }
 
+void write_paramfile(Params p, fs::path paramfile) {
+  // write Params to param file
+  log("WRITING paramfile %s") % paramfile;
+  std::ofstream pout(paramfile.string().c_str());
+  if(!(pout << p)) // write parameters to parameter file
+    throw std::runtime_error(str(format("failed to write parameter file to %s") % paramfile.c_str()));
+  pout.close();
+  log("WROTE paramfile %s") % paramfile;
+}
+
+void write_lightmap(MultiLightfield* model, fs::path outdir) {
+  log("SAVING lightmap in %s ...") % outdir;
+  model->save(outdir.string());
+  log("SAVED lightmap in %s") % outdir;
+}
+
+// read/write "learned" CSV data and add to a set of RAW image pathnames
+// that are in the lightmap and so should be skipped if they are
+// encountered again
+void write_skipfile(fs::path skipfile, std::vector<string >* learned) {
+  // write "learned" CSV data to skip file
+  log("WRITING skipfile %s") % skipfile;
+  std::ofstream sout(skipfile.string().c_str());
+  for(std::vector<std::string>::const_iterator i = learned->begin(); i != learned->end(); ++i) {
+    sout << *i << std::endl;
+  }
+  sout.close();
+  log("WROTE skipfile %s") % skipfile;
+}
+
+void read_skipfile(fs::path skipfile, std::vector<string >* learned, std::set<string >* skip) {
+  typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
+  log("READING skipfile %s") % skipfile;
+  std::ifstream sin(skipfile.string().c_str());
+  string line;
+  while(getline(sin,line)) {
+    learned->push_back(line); // push CSV record to learned
+    Tokenizer tok(line);
+    string infile = *tok.begin();
+    skip->insert(infile); // filename is first item in CSV record
+  }
+  log("READ skipfile %s") % skipfile;
+}
+
+// checkpoint the current state of a learn process
+void checkpoint(Params p, MultiLightfield* model, std::vector<std::string >* learned, string _outdir="") {
+  // output directory (_outdir, if non-empty, overrides parameter)
+  fs::path outdir(_outdir.empty() ? p.lightmap_dir : _outdir);
+  // parameter file contains program options
+  fs::path paramfile = outdir / "params.txt";
+  // skipfile lists images in the lightmap along with alt / pitch / roll
+  fs::path skipfile = outdir / "learned.csv";
+  // make sure the directory exists
+  if(p.create_directories)
+    fs::create_directories(outdir);
+  if(!fs::exists(outdir))
+    throw std::runtime_error(str(format("lightmap directory %s does not exist") % outdir));
+  // now write params
+  write_paramfile(p, paramfile);
+  // now write lightmap
+  write_lightmap(model, outdir);
+  // now write skipfile
+  write_skipfile(skipfile, learned);
+}
+
+// resume from an existing lightmap
+int resume(Params p, MultiLightfield *model, std::vector<string >* learned, std::set<string >* skip, string _outdir="") {
+  // output directory (_outdir, if non-empty, overrides parameter)
+  fs::path outdir(_outdir.empty() ? p.lightmap_dir : _outdir);
+  // skipfile lists images in the lightmap along with alt / pitch / roll
+  fs::path skipfile = outdir / "learned.csv";
+  // FIXME read parameters from param file
+  // read skipfile, if there is one
+  if(fs::exists(skipfile))
+    read_skipfile(skipfile, learned, skip);
+  // now read lightmap
+  log("LOADING lightmap from %s ...") % outdir;
+  return model->load(outdir.string());
+  log("LOADED lightmap from %s") % outdir;
+}
+
 void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
   using learn_correct::Task;
   // before any OpenCV operations are done, set global error flag
   cv::setBreakOnError(true);
-  // paths
+  // paths to lightmap files
   fs::path outdir(p.lightmap_dir);
+  // parameter file contains program options
   fs::path paramfile = outdir / "params.txt";
+  // skipfile lists images in the lightmap along with alt / pitch / roll
   fs::path skipfile = outdir / "learned.csv";
-  if(learn) {
-    // before we begin, make sure we can write to the output directory by attempting
-    // to write a parameter file
-    if(p.create_directories)
-      fs::create_directories(outdir);
-    if(!fs::exists(outdir))
-      throw std::runtime_error(str(format("output directory %s does not exist") % outdir));
-    log("WRITING paramfile %s") % paramfile.string();
-    std::ofstream pout(paramfile.string().c_str());
-    if(!(pout << p)) // write parameters to parameter file
-      throw std::runtime_error(str(format("failed to write parameter file to %s") % paramfile.c_str()));
-    pout.close();
-    log("WROTE paramfile %s") % paramfile.string();
-    if(!p.update) {
-      log("WRITING empty skipfile %s") % skipfile.string();
-      std::ofstream sout(skipfile.string().c_str());
-      sout.close();
-      log("WROTE skipfile %s") % skipfile.string();
-    } else {
-    }
-  }
   // construct an empty lightfield model based on parameters
   illum::MultiLightfield model(p.alt_spacing, p.focal_length, p.pixel_sep);
-  // load model
-  if(correct || (learn && p.update)) {
+  // construct an initially empty skip list
+  std::set<std::string > skip;
+  // construct an initially empty "learned" list
+  std::vector<std::string > learned;
+  //
+  if(learn && p.update) { // updating?
+    // resume from existing checkpoint
+    resume(p, &model, &learned, &skip);
+  } else if(learn && !p.update) {
+    // create an empty checkpoint
+    checkpoint(p, &model, &learned);
+  } else if(correct) {
     log("LOADING model from %s ...") % p.lightmap_dir;
     int loaded = model.load(p.lightmap_dir);
     if(!learn && !loaded)
       throw std::runtime_error(str(format("lightmap in %s is empty, cannot correct without training") % p.lightmap_dir));
     log("LOADED model from %s") % p.lightmap_dir;
-  }
-  // if we're updating,
-  std::set<std::string > skip;
-  if(learn && p.update) {
-    typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
-    log("READING skipfile %s") % skipfile.string();
-    std::ifstream sin(skipfile.string().c_str());
-    string line;
-    while(getline(sin,line)) {
-      Tokenizer tok(line);
-      string infile = *tok.begin();
-      skip.insert(infile); // filename is first item in CSV record
-    }
   }
   // now do a chunk of work, checkpoint, and continue
   int n_todo = 0;
@@ -217,12 +276,11 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
     for(int i = 0; i < p.n_threads; i++) {
       workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
     }
-    // for learn phase keep track of which images were learned in this batch
-    std::vector<std::string > learned;
     // now read input lines and post jobs
     std::istream* csv_in = get_input(p);
+    n_todo = p.batch_size; // how many images to process in this batch
     string line;
-    n_todo = p.batch_size;
+    int n_learned_then = learned.size();
     while(getline(*csv_in,line) && (!learn || n_todo--)) { // read pathames from a file
       try {
 	// parse the input line and turn it into a Task object
@@ -255,20 +313,10 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
     // now run all pending jobs to completion
     workers.join_all();
 
+    int n_learned_now = learned.size();
     // we know output directory already exists and can be written to
-    if(learn && n_todo < p.batch_size) {
-      log("CHECKPOINTING lightmap");
-      // write skipfile
-      fs::path outdir(p.lightmap_dir);
-      fs::path skipfile = outdir / "learned.csv";
-      log("APPENDING to skipfile %s") % skipfile.string();
-      std::ofstream sout(skipfile.string().c_str(), std::ios::app);
-      for(std::vector<std::string>::const_iterator i = learned.begin(); i != learned.end(); ++i) {
-	sout << *i << std::endl;
-      }
-      log("SAVING lightmap in %s ...") % p.lightmap_dir;
-      model.save(p.lightmap_dir);
-      log("SAVED lightmap in %s") % p.lightmap_dir;
+    if(learn && n_todo < p.batch_size && n_learned_now > n_learned_then) {
+      checkpoint(p, &model, &learned);
     }
   }// move on to next chunk
   log("COMPLETE");
