@@ -33,7 +33,7 @@ int main(int argc, char **argv) {
     OPT(OPT_INPUT,"i",string,"-","input file (default stdin, or use - to indicate stdin)")
     OPT(OPT_CREATE_DIRECTORIES,"d",bool,true,"create output directories if they don't exist")
     OPT(OPT_STEREO,"S",bool,true,"treat images as side-by-side stereo pairs")
-    OPT(OPT_UPDATE,"u",bool,false,"update existing lightmap instead of creating new one")
+    OPT(OPT_UPDATE,"u",string,"","update existing lightmap instead of creating new one (default: don't update a lightmap)")
     OPT(OPT_ALT_FROM_PARALLAX,"A",bool,false,"ignore altitude in input metadata and compute from parallax")
     OPT(OPT_BATCH_SIZE,"B",int,65535,"number of images to learn between checkpoints (learn phase)")
     OPT(OPT_SKIP_EXISTING,"n",bool,false,"skip existing images (correct phase)")

@@ -95,8 +95,8 @@ namespace learn_correct {
     bool create_directories;
     /** Whether to treat images as side-by-side stereo pairs */
     bool stereo;
-    /** Whether to load lightmap prior to learning */
-    bool update;
+    /** Which lightmap to load prior to learning */
+    std::string update;
     /** Whether to compute altitude from parallax */
     bool alt_from_parallax;
     /** Number of images to learn between checkpoints (learn phase) */
@@ -181,7 +181,7 @@ namespace learn_correct {
       max_brightness = options[OPT_MAX_BRIGHTNESS].as<double>();
       create_directories = options[OPT_CREATE_DIRECTORIES].as<bool>();
       stereo = options[OPT_STEREO].as<bool>();
-      update = options[OPT_UPDATE].as<bool>();
+      update = options[OPT_UPDATE].as<string>();
       alt_from_parallax = options[OPT_ALT_FROM_PARALLAX].as<bool>();
       batch_size = options[OPT_BATCH_SIZE].as<int>();
       skip_existing = options[OPT_SKIP_EXISTING].as<bool>();
