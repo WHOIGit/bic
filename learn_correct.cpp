@@ -338,7 +338,9 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
 
     int n_learned_now = state.n_learned();
     // we know output directory already exists and can be written to
-    if(learn && n_todo < p.batch_size && n_learned_now > n_learned_then) {
+    if(learn && n_todo > 0) { // final output? (did less than the batch size?)
+      state.checkpoint(p.lightmap_dir);
+    } else if(learn && n_todo < p.batch_size && n_learned_now > n_learned_then) {
       // shuffle directories around
       fs::path outd(p.lightmap_dir);
       fs::path latest_checkpoint = outd / "latest";
