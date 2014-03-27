@@ -81,8 +81,9 @@ public:
   stereo::CameraPair cameras; // the camera metrics
   WorkState(Params p) {
     params = p;
-    model = MultiLightfield(p.alt_spacing, p.focal_length, p.pixel_sep, p.camera_sep);
     cameras = CameraPair(p.camera_sep, p.focal_length, p.pixel_sep);
+    model = MultiLightfield(p.alt_spacing);
+    // model = illum::VehicleLightfield(p.alt_spacing, cameras)
   }
   // checkpoint the current state of a learn process
   void checkpoint(string _outdir="") {
@@ -182,7 +183,7 @@ void learn_task(WorkState* state, string inpath, double alt, double pitch, doubl
     log("READ %s") % inpath;
     // if altitude is out of range, compute from parallax
     alt = compute_missing_alt(state, alt, cfa_LR, inpath);
-    state->model.addImage(cfa_LR, alt, pitch, roll);
+    state->model.addImage(cfa_LR, alt);//, pitch, roll);
     state->add_learned(inpath, alt, pitch, roll);
     log("LEARNED %s") % inpath;
   } catch(std::runtime_error const &e) {
@@ -225,7 +226,7 @@ void correct_task(WorkState* state, string inpath, double alt, double pitch, dou
     alt = compute_missing_alt(state, alt, cfa_LR, inpath);
     // get the average
     Mat average = Mat::zeros(cfa_LR.size(), CV_32F);
-    state->model.getAverage(average, alt, pitch, roll);
+    state->model.getAverage(average, alt);//, pitch, roll);
     // now smooth the average
     int h = average.size().height;
     int w = average.size().width;

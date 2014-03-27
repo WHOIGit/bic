@@ -47,6 +47,7 @@ namespace fs = boost::filesystem;
 namespace illum {
   class Lightfield;
   class MultiLightfield;
+  class VehicleLightfield;
   void correct(cv::InputArray src, cv::OutputArray dst, cv::Mat lightfield);
 };
 
@@ -226,7 +227,7 @@ public:
 
 /**
  * One slice of a multi-lightfield. This internal class should not
-v * be used elsewhere.
+ * be used elsewhere.
  */
 template <typename T> class Slice {
 private:
@@ -249,6 +250,9 @@ public:
   }
 };
 
+/*
+
+
 /**
  * A multi-altitude lightfield consisting of a set of lightfields each
  * of which is associated with a specific altitude class. Altitude classes
@@ -264,13 +268,11 @@ public:
  * an assumed flat substrate.
  */
 class illum::MultiLightfield {
+protected:
   typedef cv::Mat Mat;
   typedef std::string string; 
-private:
   typename std::vector<Slice<int>* > slices; // altitude slices
   double alt_step;
-  stereo::CameraPair cameras;
-  bool stereo;
   Slice<int>* getSlice(int i) { // accessor for slice by altitude bin
     typename std::vector<Slice<int>* >::iterator it = slices.begin();
     for(; it != slices.end(); ++it) {
@@ -293,10 +295,127 @@ public:
    * @param camera_sep_m the distance between stereo cameras (default: 0.235m, unused if stereo is false)
    * @param stereo_pair whether the images are stereo pairs
    */
-  MultiLightfield(double step_m=0.1, double focal_length_m=0.012, double pixel_sep_m=0.00000645, double camera_sep_m=0.235, bool stereo_pair=true) {
+  MultiLightfield(double step_m=0.1) {
     alt_step = step_m;
-    cameras = stereo::CameraPair(camera_sep_m, focal_length_m, pixel_sep_m);
-    stereo = stereo_pair;
+  }
+  /**
+   * Add an image to the lightfield
+   * @param image the image to add
+   * @param alt the altitude the image was taken at
+   */
+  void addImage(Mat image, double alt) {
+    int i = 0;
+    for(; alt - (alt_step * i) < alt_step; i++)
+      ;
+    Slice<int>* slice = getSlice(i);
+    boost::mutex* mutex = slice->get_mutex();
+    { // protect slice with mutex to prevent concurrent writes
+      boost::lock_guard<boost::mutex> lock(*mutex);
+      slice->getLightfield()->addImage(image, ((alt_step * i) - alt) / alt_step);
+    }
+    i++;
+    slice = getSlice(i);
+    mutex = slice->get_mutex();
+    { // protect slice with mutex to prevent concurrent writes
+      boost::lock_guard<boost::mutex> lock(*mutex);
+      slice->getLightfield()->addImage(image, (alt - (alt_step * i)) / alt_step);
+    }
+    return;
+  }
+  /**
+   * Get the average image at the given altitude.
+   * If the altitude is not located exactly at one of the altitude bins,
+   * the average image is interpolated between any overlapping bins.
+   * @param _dst the output image (zeros at desired resolution)
+   * @param alt the altitude the image was taken at
+   */
+  void getAverage(cv::OutputArray _dst, double alt) {
+    Mat dst = _dst.getMat();
+    int i = 0;
+    for(; alt - (alt_step * i) < alt_step; i++)
+      ;
+    Slice<int>* slice = getSlice(i);
+    boost::mutex* mutex = slice->get_mutex();
+    double W1 = ((alt_step * i) - alt) / alt_step;
+    Mat A1;
+    { // protect slice with mutex to prevent concurrent writes
+      boost::lock_guard<boost::mutex> lock(*mutex);
+      A1 = slice->getLightfield()->getAverage();
+    }
+    i++;
+    slice = getSlice(i);
+    mutex = slice->get_mutex();
+    double W2 = (alt - (alt_step * i)) / alt_step;
+    Mat A2;
+    { // protect slice with mutex to prevent concurrent writes
+      boost::lock_guard<boost::mutex> lock(*mutex);
+      A2 = slice->getLightfield()->getAverage();
+    }
+    dst += (A1 * W1);
+    dst += (A2 * W2);
+    return;
+  }
+  /**
+   * Save the multi-lightfield to a directory. The lightfield is
+   * saved as a set of TIFF images. If the directory contains files
+   * with similar names, this will overwrite those files, so don't
+   * use a directory that already has other files in it.
+   *
+   * @param outdir the output directory
+   */
+  void save(string outdir) {
+    typename std::vector<Slice<int>* >::iterator it = slices.begin();
+    for(; it != slices.end(); ++it) {
+      Slice<int>* slice = *it;
+      illum::Lightfield* lf = slice->getLightfield();
+      if(!lf->empty()) {
+	int count = slice->getAlt();
+	std::stringstream outpaths;
+	outpaths << "slice_" << count << ".tiff";
+	fs::path p(outdir);
+	p /= outpaths.str();
+	lf->save(p.string());
+      }
+    }
+  }
+  /**
+   * Load the multi-lightfield from a directory. The lightfield is
+   * saved as a set of TIFF images. If the directory contains files
+   * with similar names, this will attempt to read them, so don't use
+   * a directory that wasn't populated using the save method.
+   *
+   * @param outdir the output directory where the lightfield is stored
+   * @return number of slices loaded
+   */
+  int load(string outdir) {
+    int loaded = 0;
+    for(int count = 0; count < 1000; ++count) {
+      std::stringstream inpaths;
+      inpaths << "slice_" << count << ".tiff";
+      fs::path p(outdir);
+      p /= inpaths.str();
+      if(fs::exists(p)) {
+	Slice<int>* slice = getSlice(count);
+	slice->getLightfield()->load(p.string());
+	loaded++;
+      }
+    }
+    return loaded;
+  }
+};
+
+class illum::VehicleLightfield : public illum::MultiLightfield {
+private:
+  stereo::CameraPair cameras;
+public:
+  /**
+   * Create a multi-altitude lightfield.
+   * @param step_m the width of each altitude bin in m
+   * @param cameras camera metrics
+   */
+  VehicleLightfield(double step_m, stereo::CameraPair cameras) {
+    alt_step = step_m;
+    this->cameras = cameras;
   }
   /**
    * Add an image to the lightfield
@@ -312,7 +431,7 @@ public:
     Mat D = Mat::zeros(height, width, CV_32F);
     double width_m = width * cameras.pixel_sep;
     double height_m = height * cameras.pixel_sep;
-    if(false && stereo) { // FIXME unfinished
+    if(false) { // FIXME unfinished
       Mat left = Mat(D,cv::Rect(0,0,width/2,height));
       Mat right = Mat(D,cv::Rect(width/2,0,width/2,height));
       // now compute center of overlap region in sensor coordinates
@@ -377,52 +496,5 @@ public:
       dst += sAverage.mul(W); // multiply by slice weight
       interp::dist_weight(D, W, alt_step, i++);
     }
-  }
-  /**
-   * Save the multi-lightfield to a directory. The lightfield is
-   * saved as a set of TIFF images. If the directory contains files
-   * with similar names, this will overwrite those files, so don't
-   * use a directory that already has other files in it.
-   *
-   * @param outdir the output directory
-   */
-  void save(string outdir) {
-    typename std::vector<Slice<int>* >::iterator it = slices.begin();
-    for(; it != slices.end(); ++it) {
-      Slice<int>* slice = *it;
-      illum::Lightfield* lf = slice->getLightfield();
-      if(!lf->empty()) {
-	int count = slice->getAlt();
-	std::stringstream outpaths;
-	outpaths << "slice_" << count << ".tiff";
-	fs::path p(outdir);
-	p /= outpaths.str();
-	lf->save(p.string());
-      }
-    }
-  }
-  /**
-   * Load the multi-lightfield from a directory. The lightfield is
-   * saved as a set of TIFF images. If the directory contains files
-   * with similar names, this will attempt to read them, so don't use
-   * a directory that wasn't populated using the save method.
-   *
-   * @param outdir the output directory where the lightfield is stored
-   * @return number of slices loaded
-   */
-  int load(string outdir) {
-    int loaded = 0;
-    for(int count = 0; count < 1000; ++count) {
-      std::stringstream inpaths;
-      inpaths << "slice_" << count << ".tiff";
-      fs::path p(outdir);
-      p /= inpaths.str();
-      if(fs::exists(p)) {
-	Slice<int>* slice = getSlice(count);
-	slice->getLightfield()->load(p.string());
-	loaded++;
-      }
-    }
-    return loaded;
   }
 };
