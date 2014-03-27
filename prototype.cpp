@@ -14,6 +14,7 @@
 #include "demosaic.hpp"
 #include "illumination.hpp"
 #include "interpolation.hpp"
+#include "stereo.hpp"
 #include "logging.hpp"
 
 namespace fs = boost::filesystem;
@@ -134,6 +135,8 @@ void out_flat_task(learn_correct::Params* params, illum::Lightfield* R, illum::L
 
 void prototype::test_flatness(learn_correct::Params params) {
   using std::cerr;
+  using std::endl;
+  using cv::Mat;
   // before any OpenCV operations are done, set global error flag
   cv::setBreakOnError(true);
   boost::mutex correctMutex;
@@ -174,10 +177,62 @@ void prototype::test_flatness(learn_correct::Params params) {
   // now run all pending jobs to completion
   workers.join_all();
 
+  Mat Ra = R.getAverage();
+  Mat Ga = G.getAverage();
+  Mat Ba = B.getAverage();
+
   cerr << "WRITING correct average R" << std::endl;
-  imwrite("avg_correct_R.tiff",R.getAverage());
+  imwrite("avg_correct_R.tiff",Ra);
   cerr << "WRITING correct average G" << std::endl;
-  imwrite("avg_correct_G.tiff",G.getAverage());
+  imwrite("avg_correct_G.tiff",Ga);
   cerr << "WRITING correct average B" << std::endl;
-  imwrite("avg_correct_B.tiff",B.getAverage());
+  imwrite("avg_correct_B.tiff",Ba);
+
+  std::vector<cv::Mat> bgr;
+  bgr.push_back(Ba);
+  bgr.push_back(Ga);
+  bgr.push_back(Ra);
+  cv::Mat BGR;
+  cv::merge(bgr, BGR);
+  cerr << "WRITING correct average BGR" << std::endl;
+  imwrite("avg_correct.jpg",BGR);
+}
+
+void prototype::test_dm() {
+  using cv::Mat;
+  using std::cout;
+  using std::endl;
+  Mat image(1024, 2720, CV_32F);
+  double alt=1.74;
+  double pitch=0;
+  double roll=0;
+  stereo::CameraPair cameras(0.235, 0.012, 0.00000645);
+  //
+  alt = 1.45;
+  cout << cameras.alt2xoff(alt) << endl;
+  cout << cameras.xoff2alt(cameras.alt2xoff(alt)) << endl;
+  // compute distance map
+  int width = image.size().width;
+  int height = image.size().height;
+  double width_m = width * cameras.pixel_sep;
+  double height_m = height * cameras.pixel_sep;
+  Mat stereo(1024, 2720, CV_32F);
+  Mat mono(1024, 2720, CV_32F);
+  Mat left = Mat(stereo,cv::Rect(0,0,width/2,height));
+  Mat right = Mat(stereo,cv::Rect(width/2,0,width/2,height));
+  // now compute center of overlap region in sensor coordinates
+  double xoff = cameras.alt2xoff(alt);
+  double xoff_m = xoff * cameras.pixel_sep;
+  double cx_R_px = width/2 - xoff/2; // in pixels in right frame coordaintes
+  double cx_L_px = width/2 - cx_R_px; // in pixels in left frame coordinates
+  double cx_R = cx_R_px * cameras.pixel_sep; // in meters
+  double cx_L = cx_L_px * cameras.pixel_sep; // in meters
+  cx_L = -width_m/4 + xoff_m/2;
+  cx_R = width_m/4 - xoff_m/2;
+  interp::distance_map(left, alt, pitch, roll, width_m/2, height_m, cameras.focal_length, cx_L);
+  interp::distance_map(right, alt, pitch, roll, width_m/2, height_m, cameras.focal_length, cx_R);
+  // for now, compute a distance map that in the case of stereo pairs spans the whole image
+  interp::distance_map(mono, alt, pitch, roll, width_m, height_m, cameras.focal_length);
+  cv::imwrite("dm_stereo.jpg",stereo * 100);
+  cv::imwrite("dm_mono.jpg",mono * 100);
 }

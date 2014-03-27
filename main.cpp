@@ -1,9 +1,11 @@
 #include <string>
 #include <boost/program_options.hpp>
 #include <opencv2/opencv.hpp>
+
 #include "stereo.hpp"
 #include "learn_correct.hpp"
 #include "prototype.hpp"
+#include "utils.hpp"
 
 using namespace std;
 
@@ -18,7 +20,7 @@ int main(int argc, char **argv) {
   // non-positional command line options
   po::options_description copts("Command line options");
   copts.add_options()
-    OPT(OPT_COMMAND,"c",string,"help","command to run")
+    OPT(OPT_COMMAND,"c",string,"command","command to run")
     OPT(OPT_LIGHTMAP_DIR,"l",string,"/tmp","lightmap directory")
     OPT(OPT_BAYER_PATTERN,"b",string,"rggb","bayer pattern (e.g., rggb)")
     OPT(OPT_N_THREADS,"t",int,0,"number of threads")
@@ -63,7 +65,6 @@ int main(int argc, char **argv) {
   // take action
   if(options.count(OPT_COMMAND)) {
     string command = options[OPT_COMMAND].as<string>();
-    cout << params;
     try {
       if(command=="learn") {
 	learn_correct::learn(params);
@@ -71,14 +72,18 @@ int main(int argc, char **argv) {
 	learn_correct::correct(params);
       } else if(command=="adaptive") {
 	learn_correct::adaptive(params);
-      } else if(command=="res") {
-	prototype::test_effective_resolution(params);
       } else if(command=="flat") {
 	prototype::test_flatness(params);
+      } else if(command=="alt") {
+	utils::alt_from_stereo(params);
       } else if(command=="xoff") {
 	stereo::xoff_test(argc,argv);
+      } else if(command=="res") {
+	prototype::test_effective_resolution(params);
       } else if(command=="help") {
 	cout << copts << endl;
+      } else if(command=="test_dm") {
+	prototype::test_dm();
       } else {
 	cerr << "ERROR unknown command " << command << endl;
       }

@@ -10,6 +10,7 @@
 #include <boost/algorithm/string/predicate.hpp>
 
 #include "interpolation.hpp"
+#include "stereo.hpp"
 
 namespace fs = boost::filesystem;
 
@@ -225,7 +226,7 @@ public:
 
 /**
  * One slice of a multi-lightfield. This internal class should not
- * be used elsewhere.
+v * be used elsewhere.
  */
 template <typename T> class Slice {
 private:
@@ -268,8 +269,7 @@ class illum::MultiLightfield {
 private:
   typename std::vector<Slice<int>* > slices; // altitude slices
   double alt_step;
-  double pixel_sep;
-  double focal_length;
+  stereo::CameraPair cameras;
   bool stereo;
   Slice<int>* getSlice(int i) { // accessor for slice by altitude bin
     typename std::vector<Slice<int>* >::iterator it = slices.begin();
@@ -290,12 +290,12 @@ public:
    * @param step_m the width of each altitude bin in m (default: 10cm)
    * @param focal_length_m the effective focal length in m (default: 12mm)
    * @param pixel_sep_m the physical size of a pixel in m (default: 6.45um)
+   * @param camera_sep_m the distance between stereo cameras (default: 0.235m, unused if stereo is false)
    * @param stereo_pair whether the images are stereo pairs
    */
-  MultiLightfield(double step_m=0.1, double focal_length_m=0.012, double pixel_sep_m=0.00000645, bool stereo_pair=true) {
+  MultiLightfield(double step_m=0.1, double focal_length_m=0.012, double pixel_sep_m=0.00000645, double camera_sep_m=0.235, bool stereo_pair=true) {
     alt_step = step_m;
-    focal_length = focal_length_m;
-    pixel_sep = pixel_sep_m;
+    cameras = stereo::CameraPair(camera_sep_m, focal_length_m, pixel_sep_m);
     stereo = stereo_pair;
   }
   /**
@@ -310,19 +310,22 @@ public:
     int width = image.size().width;
     int height = image.size().height;
     Mat D = Mat::zeros(height, width, CV_32F);
-    double width_m = width * pixel_sep;
-    double height_m = height * pixel_sep;
-    /* // FIXME implement the following
-    if(stereo) {
+    double width_m = width * cameras.pixel_sep;
+    double height_m = height * cameras.pixel_sep;
+    if(false && stereo) { // FIXME unfinished
       Mat left = Mat(D,cv::Rect(0,0,width/2,height));
       Mat right = Mat(D,cv::Rect(width/2,0,width/2,height));
-      // FIXME need a way to adjust center of each distance map by altitude
-      interp::distance_map(left, alt, pitch, roll, width_m/2, height_m, focal_length);
-      interp::distance_map(right, alt, pitch, roll, width_m/2, height_m, focal_length);
+      // now compute center of overlap region in sensor coordinates
+      double xoff_m = cameras.alt2xoff(alt) * cameras.pixel_sep;
+      // compute distance map for each camera frame centered on the center of the overlap region
+      double cx_L = 0; // FIXME do something here
+      double cx_R = 0; // FIXME do something here
+      interp::distance_map(left, alt, pitch, roll, width_m/2, height_m, cameras.focal_length, cx_L);
+      interp::distance_map(right, alt, pitch, roll, width_m/2, height_m, cameras.focal_length, cx_R);
+    } else {
+      // for now, compute a distance map that in the case of stereo pairs spans the whole image
+      interp::distance_map(D, alt, pitch, roll, width_m, height_m, cameras.focal_length);
     }
-    */
-    // for now, compute a distance map that in the case of stereo pairs spans the whole image
-    interp::distance_map(D, alt, pitch, roll, width_m, height_m, focal_length);
     // now discretize into slices
     int i = 0;
     Mat W = Mat::zeros(D.size(), CV_32F);
@@ -353,9 +356,9 @@ public:
     int width = dst.size().width;
     int height = dst.size().height;
     Mat D = Mat::zeros(height, width, CV_32F);
-    double width_m = width * pixel_sep;
-    double height_m = height * pixel_sep;
-    interp::distance_map(D, alt, pitch, roll, width_m, height_m, focal_length);
+    double width_m = width * cameras.pixel_sep;
+    double height_m = height * cameras.pixel_sep;
+    interp::distance_map(D, alt, pitch, roll, width_m, height_m, cameras.focal_length);
     // now discretize into slices
     int i = 0;
     Mat W = Mat::zeros(D.size(), CV_32F);

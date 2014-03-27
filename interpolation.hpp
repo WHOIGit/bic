@@ -46,10 +46,12 @@ namespace interp {
    * @param width width of sensor
    * @param height height of sensor
    * @param focal_length effective focal length
+   * @param center_x x offset of the intersection of the pitch/roll axes from center of sensor in sensor coordinates
+   * @param center_y y offset of the intersection of the pitch/roll axes from center of sensor in sensor coordinates
    *
    * @author Joe Futrelle
    */
-  void distance_map(cv::OutputArray _dst, double altitude, double pitch, double roll, double width=0.00884, double height=0.006656, double focal_length=0.012);
+  void distance_map(cv::OutputArray _dst, double altitude, double pitch, double roll, double width=0.00884, double height=0.006656, double focal_length=0.012, double center_x=0, double center_y=0);
 
   /**
    * Discretize a distance map D in the distance dimension as

@@ -24,6 +24,7 @@ namespace fs = boost::filesystem;
 
 using illum::MultiLightfield;
 using learn_correct::Params;
+using stereo::CameraPair;
 using jlog::log;
 using jlog::log_error;
 
@@ -77,9 +78,11 @@ private:
 public:
   Params params;
   illum::MultiLightfield model; // the lightfield
+  stereo::CameraPair cameras; // the camera metrics
   WorkState(Params p) {
     params = p;
-    model = MultiLightfield(p.alt_spacing, p.focal_length, p.pixel_sep);
+    model = MultiLightfield(p.alt_spacing, p.focal_length, p.pixel_sep, p.camera_sep);
+    cameras = CameraPair(p.camera_sep, p.focal_length, p.pixel_sep);
   }
   // checkpoint the current state of a learn process
   void checkpoint(string _outdir="") {
@@ -139,26 +142,26 @@ public:
   }
 };
 
-double compute_missing_alt(Params *params, double alt, cv::Mat cfa_LR, std::string inpath) {
+double compute_missing_alt(WorkState* state, double alt, cv::Mat cfa_LR, std::string inpath) {
   using stereo::align;
   using cv::Mat;
   // if altitude is good, don't recompute it
-  if(!params->alt_from_parallax && alt > 0 && alt < MAX_ALTITUDE)
+  if(!state->params.alt_from_parallax && alt > 0 && alt < MAX_ALTITUDE)
     return alt;
   // compute from parallax
   // pull green channel
   Mat G;
-  if(params->bayer_pattern[0]=='g') {
+  if(state->params.bayer_pattern[0]=='g') {
     cfa_channel(cfa_LR, G, 0, 0);
   } else {
     cfa_channel(cfa_LR, G, 1, 0);
   }
   // compute pixel offset
-  int x = align(G, params->parallax_template_size) * 2;
+  int x = align(G, state->params.parallax_template_size) * 2;
   if(x <= 0)
     throw std::runtime_error(str(format("unable to compute altitude from parallax for %s") % inpath));
   // convert to meters
-  alt = (params->camera_sep * params->focal_length * H2O_ADJUSTMENT) / (x * params->pixel_sep);
+  alt = state->cameras.xoff2alt(x);
   // log what just happened
   log("PARALLAX altitude of %s is %.2f") % inpath % alt;
   return alt;
@@ -178,7 +181,7 @@ void learn_task(WorkState* state, string inpath, double alt, double pitch, doubl
       throw std::runtime_error(str(format("image is not 16-bit grayscale: %s") % inpath));
     log("READ %s") % inpath;
     // if altitude is out of range, compute from parallax
-    alt = compute_missing_alt(&state->params, alt, cfa_LR, inpath);
+    alt = compute_missing_alt(state, alt, cfa_LR, inpath);
     state->model.addImage(cfa_LR, alt, pitch, roll);
     state->add_learned(inpath, alt, pitch, roll);
     log("LEARNED %s") % inpath;
@@ -219,7 +222,7 @@ void correct_task(WorkState* state, string inpath, double alt, double pitch, dou
     if(cfa_LR.type() != CV_16U)
       throw std::runtime_error("image is not 16-bit grayscale");
     // if altitude is out of range, compute from parallax
-    alt = compute_missing_alt(params, alt, cfa_LR, inpath);
+    alt = compute_missing_alt(state, alt, cfa_LR, inpath);
     // get the average
     Mat average = Mat::zeros(cfa_LR.size(), CV_32F);
     state->model.getAverage(average, alt, pitch, roll);

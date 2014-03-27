@@ -2,7 +2,7 @@
 
 // FIXME assumes that axes of rotation intersect center of image
 // FIXME allow for specification of center at aribtrary location
-void interp::distance_map(cv::OutputArray _dst, double altitude, double pitch, double roll, double width, double height, double focal_length) {
+void interp::distance_map(cv::OutputArray _dst, double altitude, double pitch, double roll, double width, double height, double focal_length, double center_x, double center_y) {
   using cv::Mat;
   using cv::Mat_;
 
@@ -32,9 +32,11 @@ void interp::distance_map(cv::OutputArray _dst, double altitude, double pitch, d
 
   // generate matrices of i and j coordinates for elementwise ops
   //
+  // we allow offsetting by center_x and center_y
+  //
   // this is equivalent to the following Python/numpy code
-  // Ai = np.linspace( -width/2, width/2, xres)
-  // Aj = np.linspace(-height/2,height/2, yres)
+  // Ai = np.linspace(center_x - (width/2), center_x + (width/2), xres)
+  // Aj = np.linspace(center_y - (height/2), center_y + (height/2), yres)
   // I,J = np.meshgrid(Ai,Aj)
 
   int xres = dst.size().width;
@@ -46,9 +48,9 @@ void interp::distance_map(cv::OutputArray _dst, double altitude, double pitch, d
   double istep = width / (xres-1);
   double jstep = height / (yres-1);
 
-  double i = -width/2;
+  double i = center_x - (width/2);
   for(int x = 0; x < xres; x++, i += istep) {
-    float j = -height/2;
+    float j = center_y - (height/2);
     for(int y = 0; y < yres; y++, j += jstep) {
       I.at<float>(y,x) = i;
       J.at<float>(y,x) = j;
