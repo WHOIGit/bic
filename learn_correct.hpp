@@ -244,14 +244,29 @@ namespace learn_correct {
   class Task {
     typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
     void config(std::vector<std::string> fields) {
+      // set all fields to default
+      alt = 0;
+      pitch = 0;
+      roll = 0;
+      // now process fields
       int f=0;
+      // first field is inpath. not optional
       inpath = fields.at(f++);
-      outpath = fields.at(f++);
-      alt = atof(fields.at(f++).c_str());
-      double pitch_deg = atof(fields.at(f++).c_str());
-      double roll_deg = atof(fields.at(f++).c_str());
-      pitch = M_PI * pitch_deg / 180.0; // convert pitch to radiasn
-      roll = M_PI * roll_deg / 180.0; // convert roll to radians
+      try {
+	// second field is outpath, but that's optional in learn phase,
+	// and so it could be altitude.
+	alt = atof(fields.at(f).c_str());
+	outpath = fields.at(f++);
+	// if we've reached this point, then there's an outpath so
+	// the next field is altitude.
+	alt = atof(fields.at(f++).c_str());
+	double pitch_deg = atof(fields.at(f++).c_str());
+	double roll_deg = atof(fields.at(f++).c_str());
+	pitch = M_PI * pitch_deg / 180.0; // convert pitch to radiasn
+	roll = M_PI * roll_deg / 180.0; // convert roll to radians
+      } catch(std::out_of_range) {
+	// assume defaults for all missing fields, no need to log this
+      }
     }
   public:
     std::string inpath; // input file path
