@@ -3,6 +3,7 @@
 #include <boost/thread.hpp>
 #include <boost/format.hpp>
 #include <iostream>
+#include <boost/date_time/posix_time/posix_time.hpp>
 
 namespace jlog {
   // adapted from http://stackoverflow.com/questions/1008019/c-singleton-design-pattern
@@ -30,10 +31,12 @@ namespace jlog {
       os=_os;
     }
     ~formatted_log_t() {
+      using namespace boost::posix_time;
+      ptime tm = microsec_clock::universal_time();
       boost::mutex* mutex = log_mutex_ref::getInstance().get_mutex();
       { // protect stream from simultaneous output
 	boost::lock_guard<boost::mutex> lock(*mutex);
-	*os << fmt << std::endl;
+	*os << to_iso_extended_string(tm) << "Z: " << fmt << std::endl;
       }
     }
     
