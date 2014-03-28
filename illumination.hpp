@@ -304,21 +304,21 @@ public:
    * @param alt the altitude the image was taken at
    */
   void addImage(Mat image, double alt) {
-    int i = 0;
-    for(; alt - (alt_step * i) < alt_step; i++)
-      ;
+    int i = alt / alt_step;
+    int j = i + 1;
+    double Wi = ((alt_step * j) - alt) / alt_step;
+    double Wj = (alt - (alt_step * i)) / alt_step;
     Slice<int>* slice = getSlice(i);
     boost::mutex* mutex = slice->get_mutex();
     { // protect slice with mutex to prevent concurrent writes
       boost::lock_guard<boost::mutex> lock(*mutex);
-      slice->getLightfield()->addImage(image, ((alt_step * i) - alt) / alt_step);
+      slice->getLightfield()->addImage(image, Wi);
     }
-    i++;
-    slice = getSlice(i);
+    slice = getSlice(j);
     mutex = slice->get_mutex();
     { // protect slice with mutex to prevent concurrent writes
       boost::lock_guard<boost::mutex> lock(*mutex);
-      slice->getLightfield()->addImage(image, (alt - (alt_step * i)) / alt_step);
+      slice->getLightfield()->addImage(image, Wj);
     }
     return;
   }
@@ -331,28 +331,25 @@ public:
    */
   void getAverage(cv::OutputArray _dst, double alt) {
     Mat dst = _dst.getMat();
-    int i = 0;
-    for(; alt - (alt_step * i) < alt_step; i++)
-      ;
+    int i = alt / alt_step;
+    int j = i + 1;
+    double Wi = ((alt_step * j) - alt) / alt_step;
+    double Wj = (alt - (alt_step * i)) / alt_step;
     Slice<int>* slice = getSlice(i);
     boost::mutex* mutex = slice->get_mutex();
-    double W1 = ((alt_step * i) - alt) / alt_step;
-    Mat A1;
+    Mat Ai;
     { // protect slice with mutex to prevent concurrent writes
       boost::lock_guard<boost::mutex> lock(*mutex);
-      A1 = slice->getLightfield()->getAverage();
+      Ai = slice->getLightfield()->getAverage();
     }
-    i++;
-    slice = getSlice(i);
+    slice = getSlice(j);
     mutex = slice->get_mutex();
-    double W2 = (alt - (alt_step * i)) / alt_step;
-    Mat A2;
+    Mat Aj;
     { // protect slice with mutex to prevent concurrent writes
       boost::lock_guard<boost::mutex> lock(*mutex);
-      A2 = slice->getLightfield()->getAverage();
+      Aj = slice->getLightfield()->getAverage();
     }
-    dst += (A1 * W1);
-    dst += (A2 * W2);
+    dst += (Ai * Wi) + (Aj * Wj);
     return;
   }
   /**
