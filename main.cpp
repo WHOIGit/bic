@@ -21,8 +21,8 @@ int main(int argc, char **argv) {
   po::options_description copts("Command line options");
   copts.add_options()
     OPT(OPT_COMMAND,"c",string,"command","command to run")
-    OPT(OPT_LIGHTMAP_DIR,"l",string,"/tmp","lightmap directory")
     OPT(OPT_BAYER_PATTERN,"b",string,"rggb","bayer pattern (e.g., rggb)")
+    OPT(OPT_LIGHTMAP_DIR,"l",string,"/tmp","lightmap directory")
     OPT(OPT_N_THREADS,"t",int,0,"number of threads")
     OPT(OPT_ALT_SPACING,"a",double,0.1,"distance between altitude bins (meters)")
     OPT(OPT_FOCAL_LENGTH,"f",double,0.012,"effective focal length (meters)")
@@ -39,6 +39,8 @@ int main(int argc, char **argv) {
     OPT(OPT_ALT_FROM_PARALLAX,"A",bool,false,"ignore altitude in input metadata and compute from parallax")
     OPT(OPT_BATCH_SIZE,"B",int,65535,"number of images to learn between checkpoints (learn phase)")
     OPT(OPT_SKIP_EXISTING,"n",bool,false,"skip existing images (correct phase)")
+    OPT(OPT_PATH_PREFIX_IN,"I",string,"","prefix to strip off of input pathnames when constructing output pathnames from input pathnames")
+    OPT(OPT_PATH_PREFIX_OUT,"O",string,"","prefix to prepend when constructing output pathnames from input pathnames")
     ;
   po::variables_map options;
   Params params;
@@ -85,7 +87,7 @@ int main(int argc, char **argv) {
       } else if(command=="test_dm") {
 	prototype::test_dm();
       } else {
-	cerr << "ERROR unknown command " << command << endl;
+	cerr << "ERROR unknown command " << command << endl << copts << endl;
       }
     } catch(std::runtime_error const &e) {
       cerr << "ERROR " << command << ": " << e.what() << endl;

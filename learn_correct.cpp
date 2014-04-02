@@ -8,6 +8,8 @@
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/path.hpp>
 #include <opencv2/opencv.hpp>
+#include <boost/regex.hpp>
+#include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 
 #include "learn_correct.hpp"
@@ -270,6 +272,23 @@ std::istream* learn_correct::get_input(learn_correct::Params p) {
   }
 }
 
+std::string construct_outpath(learn_correct::Params p, string inpath) {
+  using boost::algorithm::replace_first;
+  using boost::algorithm::ends_with;
+  string outpath;
+  if(inpath.empty())
+    throw std::runtime_error("cannot construct output pathname from empty input pathname");
+  if(!p.path_prefix_in.empty()) {
+    outpath = inpath;
+    replace_first(outpath, p.path_prefix_in, p.path_prefix_out);
+  } else if(!p.path_prefix_out.empty()) {
+    outpath = p.path_prefix_out + inpath;
+  }
+  boost::regex re("\\.tiff?$", boost::regex::icase);
+  outpath = regex_replace(outpath,re,".png");
+  return outpath;
+}
+
 void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
   using learn_correct::Task;
   // before any OpenCV operations are done, set global error flag
@@ -321,11 +340,14 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
 	  }
 	}
 	if(correct) { // if correcting
-	  if(p.skip_existing && fs::exists(task.outpath)) {
+	  string outpath = task.outpath.empty() ? construct_outpath(p, task.inpath) : task.outpath;
+	  if(outpath.empty())
+	    log_error("unable to construct output path for %s") % task.inpath;
+	  if(p.skip_existing && fs::exists(outpath)) {
 	    log("SKIPPED CORRECT %s") % task.outpath;
 	  } else {
 	    // push a correct task on the queue
-	    io_service.post(boost::bind(correct_task, &state, task.inpath, task.alt, task.pitch, task.roll, task.outpath));
+	    io_service.post(boost::bind(correct_task, &state, task.inpath, task.alt, task.pitch, task.roll, outpath));
 	    log("QUEUED CORRECT %s") % task.inpath;
 	  }
 	}

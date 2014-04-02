@@ -27,6 +27,8 @@
 #define OPT_ALT_FROM_PARALLAX "alt-parallax" // whether to compute altitude from parallax
 #define OPT_BATCH_SIZE "batch" // how many images to learn between checkpointing the lightmap
 #define OPT_SKIP_EXISTING "new" // whether to skip existing images
+#define OPT_PATH_PREFIX_IN "in_prefix" // strip and/or replace input path prefix to construct output path
+#define OPT_PATH_PREFIX_OUT "out_prefix" // strip and/or replace input path prefix to construct output path
 
 namespace po = boost::program_options;
 
@@ -103,6 +105,10 @@ namespace learn_correct {
     int batch_size;
     /** Whether to skip processing existing images (correct phase) */
     bool skip_existing;
+    /** Path prefix to strip (if any) */
+    std::string path_prefix_in;
+    /** Replacement path prefix (if any) */
+    std::string path_prefix_out;
     /**
      * Validate parameters. Checks for obviously invalid parameters
      * such as negative focal lengths, min_brightness > max_brightness,
@@ -153,6 +159,8 @@ namespace learn_correct {
 	cerr << "warning: batch size " << batch_size << " less than thread count " << n_threads << endl;
       if(batch_size < 200)
 	cerr << "warning: small batch size of " << batch_size << " will result in poor performance in learn phase" << endl;
+      if(!path_prefix_in.empty() && path_prefix_out.empty())
+	cerr << "warning: input path prefix specified, but output path prefix not specified (use -O to specify)" << endl;
     }
     Params() { }
     /**
@@ -185,6 +193,8 @@ namespace learn_correct {
       alt_from_parallax = options[OPT_ALT_FROM_PARALLAX].as<bool>();
       batch_size = options[OPT_BATCH_SIZE].as<int>();
       skip_existing = options[OPT_SKIP_EXISTING].as<bool>();
+      path_prefix_in = options[OPT_PATH_PREFIX_IN].as<string>();
+      path_prefix_out = options[OPT_PATH_PREFIX_OUT].as<string>();
       if(_validate)
 	validate();
     }
@@ -216,6 +226,8 @@ namespace learn_correct {
       strm << OPT_ALT_FROM_PARALLAX << " = " << p.alt_from_parallax << endl;
       strm << OPT_BATCH_SIZE << " = " << p.batch_size << endl;
       strm << OPT_SKIP_EXISTING << " = " << p.skip_existing << endl;
+      strm << OPT_PATH_PREFIX_IN << " = " << p.path_prefix_in << endl;
+      strm << OPT_PATH_PREFIX_OUT << " = " << p.path_prefix_out << endl;
       return strm;
     }
   };
