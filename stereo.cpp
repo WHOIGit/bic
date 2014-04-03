@@ -40,7 +40,7 @@ int stereo::align(cv::Mat y_LR_in, int template_size) {
   // take at least SAMPLE_SIZE samples
   int SAMPLE_SIZE=5, n=0;
   // try at least GIVE_UP times to get samples
-  int GIVE_UP=SAMPLE_SIZE * 4, g=0;
+  int GIVE_UP=100, g=0;
   using namespace boost::accumulators;
   accumulator_set<int, stats<tag::median > > samples;
   while(n < SAMPLE_SIZE && g < GIVE_UP) {
