@@ -236,3 +236,18 @@ void prototype::test_dm() {
   cv::imwrite("dm_stereo.jpg",stereo * 100);
   cv::imwrite("dm_mono.jpg",mono * 100);
 }
+
+void prototype::afp(learn_correct::Params p) {
+  // compute alt from parallax for a single image
+  string inpath = p.input; // input must be pathname to 16-bit RAW image
+  Mat cfa_LR = imread(inpath, CV_LOAD_IMAGE_ANYDEPTH); // read input image
+  if(cfa_LR.empty()) {
+    throw runtime_error("empty image");
+  }
+  stereo::CameraPair cameras(p.camera_sep, p.focal_length, p.pixel_sep);
+  Mat y_LR;
+  cfa_channel(cfa_LR, y_LR, 1, 0);
+  int xoff = stereo::align(y_LR);
+  double alt = cameras.xoff2alt(xoff);
+  cout << xoff << "px, " << alt << "m" << endl;
+}

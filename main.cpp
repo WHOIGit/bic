@@ -86,6 +86,8 @@ int main(int argc, char **argv) {
 	cout << copts << endl;
       } else if(command=="test_dm") {
 	prototype::test_dm();
+      } else if(command=="afp") {
+	prototype::afp(params);
       } else {
 	cerr << "ERROR unknown command " << command << endl << copts << endl;
       }

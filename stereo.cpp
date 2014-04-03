@@ -39,9 +39,12 @@ int stereo::align(cv::Mat y_LR_in, int template_size) {
   RNG rng(seedValue); // always use same seed
   // take at least SAMPLE_SIZE samples
   int SAMPLE_SIZE=5, n=0;
+  // try at least GIVE_UP times to get samples
+  int GIVE_UP=SAMPLE_SIZE * 4, g=0;
   using namespace boost::accumulators;
   accumulator_set<int, stats<tag::median > > samples;
-  while(n < SAMPLE_SIZE) {
+  while(n < SAMPLE_SIZE && g < GIVE_UP) {
+    g++; // every attempt counts towards giving up
     int x = rng.uniform(ts*2,w2-ts*4);
     int y = rng.uniform(0,h-ts*2+1);
     Mat templ(y_LR,Rect(x,y,ts,ts));
@@ -61,6 +64,7 @@ int stereo::align(cv::Mat y_LR_in, int template_size) {
     if(xoff < 0 || ydiff > ts2) {
       continue;
     }
+    // we have a sample, this counts towards sample size
     samples(x-(mx-w2));
     n++;
   }
