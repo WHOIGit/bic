@@ -303,10 +303,11 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
     if(!learn && !loaded)
       throw std::runtime_error(str(format("lightmap in %s is empty, cannot correct without training") % p.lightmap_dir));
   }
+  // open/acquire input stream on CSV data
+  std::istream* csv_in = get_input(p);
   log("READY to start processing");
   // now do a chunk of work, checkpoint, and continue
-  int n_todo = 0;
-  while(n_todo <= 0) {
+  for(int n_todo = 0; n_todo <= 0;) {
     // post all work
     boost::asio::io_service io_service;
     boost::thread_group workers;
@@ -318,8 +319,6 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
     for(int i = 0; i < p.n_threads; i++) {
       workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
     }
-    // now read input lines and post jobs
-    std::istream* csv_in = get_input(p);
     n_todo = p.batch_size; // how many images to process in this batch
     string line;
     int n_learned_then = state.n_learned();
@@ -395,6 +394,7 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
       }
     }
   }// move on to next chunk
+  // all chunks done
   log("COMPLETE");
 }
 
