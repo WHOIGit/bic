@@ -282,6 +282,8 @@ namespace learn_correct {
 	// second field is outpath, but that's optional in learn phase,
 	// and so it could be altitude.
 	alt = atof(fields.at(f).c_str());
+	if(alt != 0) // we got a nonzero altitude
+	  f++;
 	outpath = fields.at(f++);
 	// if we've reached this point, then there's an outpath so
 	// the next field is altitude.

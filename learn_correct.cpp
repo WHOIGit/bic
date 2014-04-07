@@ -241,18 +241,10 @@ cv::Mat correct_one(WorkState* state, cv::Mat cfa_LR, string inpath, double alt,
   return rgb_LR_8u;
 }
 
-// construct a correct outpath based on the given one
-// and parameters. if params say to skip existing images,
-// test for existence and throw exception in that case
-string get_outpath(Params* params, string inpath, string outpath) {
+// return outpath if it is able and allowed to be written
+string check_outpath(Params* params, string inpath, string outpath) {
   using boost::format;
   using boost::str;
-  using boost::algorithm::ends_with;
-  // make sure output path ends with ".png"
-  string lop = outpath;
-  boost::to_lower(lop);
-  if(!ends_with(lop,".png"))
-    outpath = outpath + ".png";
   // first, make sure we can write the output file
   fs::path outp(outpath);
   // if we're skipping existing images, check once again for existence
@@ -282,7 +274,7 @@ void correct_task(WorkState* state, string inpath, double alt, double pitch, dou
     Params* params = &state->params;
     log("START CORRECT %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll;
     // construct the outpath, but throw exception if it exists and skip_existing is true
-    outpath = get_outpath(params, inpath, outpath);
+    outpath = check_outpath(params, inpath, outpath);
     // read RAW image
     Mat cfa_LR = read_16u(inpath);
     // if altitude is out of range, compute from parallax
@@ -292,6 +284,41 @@ void correct_task(WorkState* state, string inpath, double alt, double pitch, dou
     // now write corrected image to outpath
     write_corrected(params, rgb_LR, outpath);
   log("CORRECTED %s") % inpath;
+  } catch(std::runtime_error const &e) {
+    log_error("ERROR correcting %s: %s") % inpath % e.what();
+  } catch(std::exception) {
+    log_error("ERROR correcting %s") % inpath;
+  }
+}
+
+// the adaptive task learns and corrects simultaneously
+void adaptive_task(WorkState* state, string inpath, double alt, double pitch, double roll, string outpath) {
+  using cv::Mat;
+  log("START ADAPTIVE %s %.2f") % inpath % alt;
+  // read RAW image
+  Mat cfa_LR = read_16u(inpath);
+  log("READ %s") % inpath;
+  // if altitude is out of range, compute from parallax
+  alt = compute_missing_alt(state, alt, cfa_LR, inpath);
+  // then learn the image
+  try {
+    learn_one(state, cfa_LR, inpath, alt, pitch, roll);
+    log("LEARNED %s") % inpath;
+  } catch(std::runtime_error const &e) {
+    log_error("ERROR learning %s: %s") % inpath % e.what();
+  } catch(std::exception) {
+    log_error("ERROR learning %s") % inpath;
+  }
+  // correct the image
+  try {
+    Params* params = &state->params;
+    // construct the outpath, but throw exception if it exists and skip_existing is true
+    outpath = check_outpath(params, inpath, outpath);
+    // now correct the image
+    Mat rgb_LR = correct_one(state, cfa_LR, inpath, alt, pitch, roll);
+    // now write corrected image to outpath
+    write_corrected(params, rgb_LR, outpath);
+    log("CORRECTED %s") % inpath;
   } catch(std::runtime_error const &e) {
     log_error("ERROR correcting %s: %s") % inpath % e.what();
   } catch(std::exception) {
@@ -363,27 +390,28 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
 	Task task = Task(line);
 	// check that the task is valid
 	task.validate();
-	if(learn) { // if learning
-	  // is the inpath on the skip list?
-	  if(!state.should_skip(task.inpath)) {
-	    // push a learn task on the queue
-	    io_service.post(boost::bind(learn_task, &state, task.inpath, task.alt, task.pitch, task.roll));
-	    log("QUEUED LEARN %s") % task.inpath;
-	  } else {
-	    log("SKIPPED LEARN %s") % task.inpath;
-	  }
-	}
+	// make sure we've got a good outpath
+	string outpath; // may be needed for adaptive
 	if(correct) { // if correcting
-	  string outpath = task.outpath.empty() ? construct_outpath(p, task.inpath) : task.outpath;
+	  outpath = task.outpath.empty() ? construct_outpath(p, task.inpath) : task.outpath;
 	  if(outpath.empty())
 	    log_error("unable to construct output path for %s") % task.inpath;
-	  if(p.skip_existing && fs::exists(outpath)) {
-	    log("SKIPPED CORRECT %s") % task.outpath;
-	  } else {
-	    // push a correct task on the queue
-	    io_service.post(boost::bind(correct_task, &state, task.inpath, task.alt, task.pitch, task.roll, outpath));
-	    log("QUEUED CORRECT %s") % task.inpath;
-	  }
+	}
+	// regardless of which phase we're in, figure out if we really need to do learn/correct work on this inpath/outpath
+	bool should_learn = learn && !state.should_skip(task.inpath);
+	bool should_correct = correct && !outpath.empty() && !(p.skip_existing && fs::exists(outpath));
+	if(should_learn && should_correct) {
+	  // push an adaptive task on the queue
+	  io_service.post(boost::bind(adaptive_task, &state, task.inpath, task.alt, task.pitch, task.roll, outpath));
+	  log("QUEUED ADAPTIVE %s") % task.inpath;
+	} else if(should_learn) {
+	  // push a learn task on the queue
+	  io_service.post(boost::bind(learn_task, &state, task.inpath, task.alt, task.pitch, task.roll));
+	  log("QUEUED LEARN %s") % task.inpath;
+	} else if(should_correct) { 
+	  // push a correct task on the queue
+	  io_service.post(boost::bind(correct_task, &state, task.inpath, task.alt, task.pitch, task.roll, outpath));
+	  log("QUEUED CORRECT %s") % task.inpath;
 	}
       } catch(std::runtime_error const &e) {
 	log_error("ERROR parsing input metadata: %s: last line read was '%s'") % e.what() % line;
