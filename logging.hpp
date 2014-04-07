@@ -36,7 +36,7 @@ namespace jlog {
       boost::mutex* mutex = log_mutex_ref::getInstance().get_mutex();
       { // protect stream from simultaneous output
 	boost::lock_guard<boost::mutex> lock(*mutex);
-	*os << to_iso_extended_string(tm) << "Z: " << fmt << std::endl;
+	*os << to_iso_extended_string(tm) << "Z," << fmt << std::endl;
       }
     }
     
