@@ -241,39 +241,56 @@ cv::Mat correct_one(WorkState* state, cv::Mat cfa_LR, string inpath, double alt,
   return rgb_LR_8u;
 }
 
+// construct a correct outpath based on the given one
+// and parameters. if params say to skip existing images,
+// test for existence and throw exception in that case
+string get_outpath(Params* params, string inpath, string outpath) {
+  using boost::format;
+  using boost::str;
+  using boost::algorithm::ends_with;
+  // make sure output path ends with ".png"
+  string lop = outpath;
+  boost::to_lower(lop);
+  if(!ends_with(lop,".png"))
+    outpath = outpath + ".png";
+  // first, make sure we can write the output file
+  fs::path outp(outpath);
+  // if we're skipping existing images, check once again for existence
+  if(params->skip_existing && fs::exists(outp)) {
+    throw std::runtime_error(str(format("SKIPPING %s because %s exists") % inpath % outpath));
+  }
+  return outpath;
+}
+
+// write a corrected image to its outpath
+void write_corrected(Params* params, cv::Mat rgb_LR, string outpath) {
+  // now create output directory if necessary
+  fs::path outp(outpath);
+  fs::path outdir = outp.parent_path();
+  if(params->create_directories)
+    fs::create_directories(outdir);
+  // now write the output image
+  log("SAVING corrected image to %s") % outpath;
+  if(!imwrite(outpath, rgb_LR))
+    throw std::runtime_error(str(format("unable to write output image to %s") % outpath));
+}
+
 // the correct task corrects images
 void correct_task(WorkState* state, string inpath, double alt, double pitch, double roll, string outpath) {
   using cv::Mat;
-  using boost::algorithm::ends_with;
   try {
     Params* params = &state->params;
     log("START CORRECT %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll;
-    // make sure output path ends with ".png"
-    string lop = outpath;
-    boost::to_lower(lop);
-    if(!ends_with(lop,".png"))
-      outpath = outpath + ".png";
-    // first, make sure we can write the output file
-    fs::path outp(outpath);
-    // if we're skipping existing images, check once again for existence
-    if(params->skip_existing && fs::exists(outp)) {
-      log("SKIPPING %s because %s exists") % inpath % outpath;
-      return;
-    }
-    // proceed
+    // construct the outpath, but throw exception if it exists and skip_existing is true
+    outpath = get_outpath(params, inpath, outpath);
+    // read RAW image
     Mat cfa_LR = read_16u(inpath);
     // if altitude is out of range, compute from parallax
     alt = compute_missing_alt(state, alt, cfa_LR, inpath);
-    // now correct
+    // now correct the image
     Mat rgb_LR = correct_one(state, cfa_LR, inpath, alt, pitch, roll);
-    // now create output directory if necessary
-    fs::path outdir = outp.parent_path();
-    if(params->create_directories)
-      fs::create_directories(outdir);
-    // now write the output image
-    log("SAVING corrected image to %s") % outpath;
-    if(!imwrite(outpath, rgb_LR))
-      throw std::runtime_error(str(format("unable to write output image to %s") % outpath));
+    // now write corrected image to outpath
+    write_corrected(params, rgb_LR, outpath);
   log("CORRECTED %s") % inpath;
   } catch(std::runtime_error const &e) {
     log_error("ERROR correcting %s: %s") % inpath % e.what();
