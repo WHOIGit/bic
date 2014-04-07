@@ -171,6 +171,22 @@ double compute_missing_alt(WorkState* state, double alt, cv::Mat cfa_LR, std::st
   return alt;
 }
 
+// read an image from a file and make sure it's 16-bit RAW
+cv::Mat read_16u(string inpath) {
+  cv::Mat img = cv::imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
+  if(!img.data)
+    throw std::runtime_error(str(format("unable to read image file: %s") % inpath));
+  if(img.type() != CV_16U)
+    throw std::runtime_error(str(format("image is not 16-bit grayscale: %s") % inpath));
+  return img;
+}
+
+// learn one image
+void learn_one(WorkState* state, cv::Mat cfa_LR, string inpath, double alt=0, double pitch=0, double roll=0) {
+  state->model.addImage(cfa_LR, alt);
+  state->add_learned(inpath, alt, pitch, roll);
+}
+
 // the learn task adds an image to a multilightfield model
 void learn_task(WorkState* state, string inpath, double alt, double pitch, double roll) {
   using cv::Mat;
@@ -178,22 +194,51 @@ void learn_task(WorkState* state, string inpath, double alt, double pitch, doubl
   try  {
     log("START LEARN %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll;
     // read the image (this can be done in parallel)
-    Mat cfa_LR = cv::imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
-    if(!cfa_LR.data)
-      throw std::runtime_error(str(format("unable to read image file: %s") % inpath));
-    if(cfa_LR.type() != CV_16U)
-      throw std::runtime_error(str(format("image is not 16-bit grayscale: %s") % inpath));
+    Mat cfa_LR = read_16u(inpath);
     log("READ %s") % inpath;
-    // if altitude is out of range, compute from parallax
+    // determine altitude if necessary
     alt = compute_missing_alt(state, alt, cfa_LR, inpath);
-    state->model.addImage(cfa_LR, alt);//, pitch, roll);
-    state->add_learned(inpath, alt, pitch, roll);
+    // now learn the image
+    learn_one(state, cfa_LR, inpath, alt, pitch, roll);
     log("LEARNED %s") % inpath;
   } catch(std::runtime_error const &e) {
     log_error("ERROR learning %s: %s") % inpath % e.what();
   } catch(std::exception) {
     log_error("ERROR learning %s") % inpath;
   }
+}
+
+// correct one image (and return corrected image)
+cv::Mat correct_one(WorkState* state, cv::Mat cfa_LR, string inpath, double alt, double pitch, double roll) {
+  using cv::Mat;
+  Params* params = &state->params;
+  // get the average
+  Mat average;
+  state->model.getAverage(average, alt);
+  // now smooth the average
+  int h = average.size().height;
+  int w = average.size().width;
+  if(params->stereo) {
+    Mat left = Mat(average,cv::Rect(0,0,w/2,h));
+    Mat right = Mat(average,cv::Rect(w/2,0,w/2,h));
+    cfa_smooth(left,left,params->lightmap_smoothing);
+    cfa_smooth(right,right,params->lightmap_smoothing);
+  } else {
+    cfa_smooth(cfa_LR,cfa_LR,params->lightmap_smoothing);
+  }
+  log("SMOOTHED lightmap for %s") % inpath;
+  illum::correct(cfa_LR, cfa_LR, average); // correct it
+  log("DEMOSAICING %s") % inpath;
+  // demosaic it
+  Mat rgb_LR = demosaic(cfa_LR,params->bayer_pattern);
+  // brightness and contrast parameters
+  double max = params->max_brightness;
+  double min = params->min_brightness;
+  // adjust brightness/contrast and save as 8-bit png
+  Mat rgb_LR_8u;
+  rgb_LR = rgb_LR * (255.0 / (65535.0 * (max - min))) - (min * 255.0);
+  rgb_LR.convertTo(rgb_LR_8u, CV_8U);
+  return rgb_LR_8u;
 }
 
 // the correct task corrects images
@@ -210,54 +255,26 @@ void correct_task(WorkState* state, string inpath, double alt, double pitch, dou
       outpath = outpath + ".png";
     // first, make sure we can write the output file
     fs::path outp(outpath);
-    fs::path outdir = outp.parent_path();
-    // now create output directory if necessary
-    if(params->create_directories)
-      fs::create_directories(outdir);
     // if we're skipping existing images, check once again for existence
     if(params->skip_existing && fs::exists(outp)) {
       log("SKIPPING %s because %s exists") % inpath % outpath;
       return;
     }
     // proceed
-    Mat cfa_LR = cv::imread(inpath, CV_LOAD_IMAGE_ANYDEPTH); // read input image
-    if(!cfa_LR.data)
-      throw std::runtime_error("no image data");
-    if(cfa_LR.type() != CV_16U)
-      throw std::runtime_error("image is not 16-bit grayscale");
+    Mat cfa_LR = read_16u(inpath);
     // if altitude is out of range, compute from parallax
     alt = compute_missing_alt(state, alt, cfa_LR, inpath);
-    // get the average
-    Mat average = Mat::zeros(cfa_LR.size(), CV_32F);
-    state->model.getAverage(average, alt);
-    // now smooth the average
-    int h = average.size().height;
-    int w = average.size().width;
-    if(params->stereo) {
-      Mat left = Mat(average,cv::Rect(0,0,w/2,h));
-      Mat right = Mat(average,cv::Rect(w/2,0,w/2,h));
-      cfa_smooth(left,left,params->lightmap_smoothing);
-      cfa_smooth(right,right,params->lightmap_smoothing);
-    } else {
-      cfa_smooth(cfa_LR,cfa_LR,params->lightmap_smoothing);
-    }
-    log("SMOOTHED lightmap for %s") % inpath;
-    illum::correct(cfa_LR, cfa_LR, average); // correct it
-    log("DEMOSAICING %s") % inpath;
-    // demosaic it
-    Mat rgb_LR = demosaic(cfa_LR,params->bayer_pattern);
-    // brightness and contrast parameters
-    double max = params->max_brightness;
-    double min = params->min_brightness;
-    // adjust brightness/contrast and save as 8-bit png
-    Mat rgb_LR_8u;
-    rgb_LR = rgb_LR * (255.0 / (65535.0 * (max - min))) - (min * 255.0);
-    rgb_LR.convertTo(rgb_LR_8u, CV_8U);
+    // now correct
+    Mat rgb_LR = correct_one(state, cfa_LR, inpath, alt, pitch, roll);
+    // now create output directory if necessary
+    fs::path outdir = outp.parent_path();
+    if(params->create_directories)
+      fs::create_directories(outdir);
     // now write the output image
     log("SAVING corrected image to %s") % outpath;
-    if(!imwrite(outpath, rgb_LR_8u))
+    if(!imwrite(outpath, rgb_LR))
       throw std::runtime_error(str(format("unable to write output image to %s") % outpath));
-    log("CORRECTED %s") % inpath;
+  log("CORRECTED %s") % inpath;
   } catch(std::runtime_error const &e) {
     log_error("ERROR correcting %s: %s") % inpath % e.what();
   } catch(std::exception) {
