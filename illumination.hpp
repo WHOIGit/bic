@@ -1,8 +1,9 @@
-#pragma once
 #include <exception>
 #include <stdexcept>
+#include <string>
 #include <fstream>
 #include <boost/thread.hpp>
+#include <boost/format.hpp>
 #include <opencv2/opencv.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/path.hpp>
@@ -292,6 +293,8 @@ protected:
   typedef std::string string; 
   typename std::vector<Slice<int>* > slices; // altitude slices
   double alt_step;
+  int undertrain;
+  int overtrain;
   Slice<int>* getSlice(int i) { // accessor for slice by altitude bin
     typename std::vector<Slice<int>* >::iterator it = slices.begin();
     for(; it != slices.end(); ++it) {
@@ -309,13 +312,13 @@ public:
   /**
    * Create a multi-altitude lightfield.
    * @param step_m the width of each altitude bin in m (default: 10cm)
-   * @param focal_length_m the effective focal length in m (default: 12mm)
-   * @param pixel_sep_m the physical size of a pixel in m (default: 6.45um)
-   * @param camera_sep_m the distance between stereo cameras (default: 0.235m, unused if stereo is false)
-   * @param stereo_pair whether the images are stereo pairs
+   * @param undertrain undertraining threshold (in number of images)
+   * @param overtrain overtraining threshold (in number of images)
    */
-  MultiLightfield(double step_m=0.1) {
+  MultiLightfield(double step_m=0.1, int undertrain=20, int overtrain=65535) {
     alt_step = step_m;
+    this->undertrain = undertrain;
+    this->overtrain = overtrain;
   }
   /**
    * Add an image to the lightfield
@@ -349,6 +352,8 @@ public:
    * @param alt the altitude the image was taken at
    */
   void getAverage(cv::OutputArray _dst, double alt) {
+    using boost::format;
+    using boost::str;
     int i = alt / alt_step;
     int j = i + 1;
     double Wi = ((alt_step * j) - alt) / alt_step;
@@ -356,17 +361,24 @@ public:
     Slice<int>* slice = getSlice(i);
     boost::mutex* mutex = slice->get_mutex();
     Mat Ai;
+    double minCount, maxCount;
     { // protect slice with mutex to prevent concurrent writes
       boost::lock_guard<boost::mutex> lock(*mutex);
       Ai = slice->getLightfield()->getAverage();
+      slice->getLightfield()->minMaxCount(&minCount, &maxCount);
     }
+    if(minCount < undertrain)
+      throw std::runtime_error(str(format("lightmap is undertrained at %.2f") % (i*alt_step)));
     slice = getSlice(j);
     mutex = slice->get_mutex();
     Mat Aj;
     { // protect slice with mutex to prevent concurrent writes
       boost::lock_guard<boost::mutex> lock(*mutex);
       Aj = slice->getLightfield()->getAverage();
+      slice->getLightfield()->minMaxCount(&minCount, &maxCount);
     }
+    if(minCount < undertrain)
+      throw std::runtime_error(str(format("lightmap is undertrained at %.2f") % (j*alt_step)));
     // ensure destination image is not empty
     _dst.create(Ai.size(), Ai.type());
     Mat dst = _dst.getMat();
@@ -389,7 +401,7 @@ public:
     for(; it != slices.end(); ++it) {
       Slice<int>* slice = *it;
       illum::Lightfield* lf = slice->getLightfield();
-      if(!lf->empty()) {
+      if(!lf->empty()) { // FIXME should check for undertraining?
 	int count = slice->getAlt();
 	std::stringstream outpaths;
 	outpaths << "slice_" << count << ".tiff";

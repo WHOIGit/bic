@@ -84,7 +84,7 @@ public:
   WorkState(Params p) {
     params = p;
     cameras = CameraPair(p.camera_sep, p.focal_length, p.pixel_sep);
-    model = MultiLightfield(p.alt_spacing);
+    model = MultiLightfield(p.alt_spacing, p.undertrain, p.overtrain);
     // model = illum::VehicleLightfield(p.alt_spacing, cameras)
   }
   // checkpoint the current state of a learn process
@@ -229,7 +229,7 @@ void correct_task(WorkState* state, string inpath, double alt, double pitch, dou
     alt = compute_missing_alt(state, alt, cfa_LR, inpath);
     // get the average
     Mat average = Mat::zeros(cfa_LR.size(), CV_32F);
-    state->model.getAverage(average, alt);//, pitch, roll);
+    state->model.getAverage(average, alt);
     // now smooth the average
     int h = average.size().height;
     int w = average.size().width;

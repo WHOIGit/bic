@@ -29,6 +29,8 @@
 #define OPT_SKIP_EXISTING "new" // whether to skip existing images
 #define OPT_PATH_PREFIX_IN "in_prefix" // strip and/or replace input path prefix to construct output path
 #define OPT_PATH_PREFIX_OUT "out_prefix" // strip and/or replace input path prefix to construct output path
+#define OPT_UNDERTRAIN "undertrain" // undertraining threshold in numbers of images
+#define OPT_OVERTRAIN "overtrain" // overtraining threshold in numbers of images
 
 namespace po = boost::program_options;
 
@@ -109,6 +111,10 @@ namespace learn_correct {
     std::string path_prefix_in;
     /** Replacement path prefix (if any) */
     std::string path_prefix_out;
+    /** Undertraining threshold (in numbers of images) */
+    int undertrain;
+    /** Overtraining threshold (in numbers of images) */
+    int overtrain;
     /**
      * Validate parameters. Checks for obviously invalid parameters
      * such as negative focal lengths, min_brightness > max_brightness,
@@ -161,6 +167,10 @@ namespace learn_correct {
 	cerr << "warning: small batch size of " << batch_size << " will result in poor performance in learn phase" << endl;
       if(!path_prefix_in.empty() && path_prefix_out.empty())
 	cerr << "warning: input path prefix specified, but output path prefix not specified (use -O to specify)" << endl;
+      if(undertrain < 1)
+	throw std::logic_error("undertraining threshold must be >= 1 images");
+      if(overtrain <= undertrain)
+	throw std::logic_error("overtraining threshold must be greater than undertraining threshold");
     }
     Params() { }
     /**
@@ -195,6 +205,8 @@ namespace learn_correct {
       skip_existing = options[OPT_SKIP_EXISTING].as<bool>();
       path_prefix_in = options[OPT_PATH_PREFIX_IN].as<string>();
       path_prefix_out = options[OPT_PATH_PREFIX_OUT].as<string>();
+      undertrain = options[OPT_UNDERTRAIN].as<int>();
+      overtrain = options[OPT_OVERTRAIN].as<int>();
       if(_validate)
 	validate();
     }
@@ -228,6 +240,8 @@ namespace learn_correct {
       strm << OPT_SKIP_EXISTING << " = " << p.skip_existing << endl;
       strm << OPT_PATH_PREFIX_IN << " = " << p.path_prefix_in << endl;
       strm << OPT_PATH_PREFIX_OUT << " = " << p.path_prefix_out << endl;
+      strm << OPT_UNDERTRAIN << " = " << p.undertrain << endl;
+      strm << OPT_OVERTRAIN << " = " << p.overtrain << endl;
       return strm;
     }
   };
