@@ -166,21 +166,40 @@ public:
     return sum / count;
   }
   /**
+   * Return the maximum and minimum image counts for this lightmap.
+   */
+  void minMaxCount(double* minCount, double* maxCount) {
+    cv::minMaxLoc(count, minCount, maxCount);
+  }
+  /**
    * Save the lightfield to an image file. The image file will contain
    * both average and count information, so will be twice the
    * dimensions of the input images.
    *
    * @param pathname the file to save to. Must end with a TIFF extension
    * e.g., ".tiff"
+   * @param ensure_unity adjust lightmap counts so that they are >= 1
+   * to prevent zeros in the count image
    */
-  void save(string pathname) {
+  void save(string pathname, bool ensure_unity=true) {
     using cv::Rect;
     using boost::algorithm::ends_with;
     string lp = pathname;
     boost::to_lower(lp);
     if(!(ends_with(lp,".tif") || ends_with(lp,".tiff")))
       throw std::runtime_error("lightfield output pathname does not end with .tif or .tiff");
-    Mat average = getAverage();
+    Mat adj_sum = sum;
+    Mat adj_count = count;
+    if(ensure_unity) {
+      double minCount, maxCount;
+      minMaxCount(&minCount, &maxCount);
+      if(minCount < 1) {
+	double scale = 1.0 / minCount;
+	adj_sum *= scale;
+	adj_count *= scale;
+      }
+    }
+    Mat average = adj_sum / adj_count; // FIXME tile from getAverage
     // create a composite image twice the height of the frame
     Mat composite;
     int h = average.size().height;
@@ -330,7 +349,6 @@ public:
    * @param alt the altitude the image was taken at
    */
   void getAverage(cv::OutputArray _dst, double alt) {
-    Mat dst = _dst.getMat();
     int i = alt / alt_step;
     int j = i + 1;
     double Wi = ((alt_step * j) - alt) / alt_step;
@@ -349,7 +367,13 @@ public:
       boost::lock_guard<boost::mutex> lock(*mutex);
       Aj = slice->getLightfield()->getAverage();
     }
-    dst += (Ai * Wi) + (Aj * Wj);
+    // ensure destination image is not empty
+    _dst.create(Ai.size(), Ai.type());
+    Mat dst = _dst.getMat();
+    if(dst.type() != CV_32F)
+      throw std::runtime_error("output image must be 32-bit floating point");
+    // now set it to the average
+    dst = (Ai * Wi) + (Aj * Wj);
     return;
   }
   /**

@@ -5,6 +5,7 @@
 #include <opencv2/opencv.hpp>
 #include <boost/thread.hpp>
 #include <boost/asio.hpp>
+#include <boost/format.hpp>
 #include <boost/tokenizer.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/algorithm/string/predicate.hpp>
@@ -250,4 +251,50 @@ void prototype::afp(learn_correct::Params p) {
   int xoff = stereo::align(y_LR);
   double alt = cameras.xoff2alt(xoff);
   cout << xoff << "px, " << alt << "m" << endl;
+}
+
+void prototype::test_interpolation(learn_correct::Params p) {
+  using boost::format;
+  using boost::str;
+  illum::MultiLightfield model(p.alt_spacing); // the lightfield
+  //stereo::CameraPair cameras; // the camera metrics
+  //cameras = CameraPair(p.camera_sep, p.focal_length, p.pixel_sep);
+  // now read lightmap
+  log_error("LOADING lightmap from %s ...") % p.lightmap_dir;
+  int loaded = model.load(p.lightmap_dir);
+  log_error("LOADED %d lightmap slices from %s") % loaded % p.lightmap_dir;
+  // now generate averages
+  for(double alt = 0; alt < 3; alt += 0.01) {
+    try {
+      Mat avg;
+      model.getAverage(avg, alt);
+      Scalar sm = cv::mean(avg);
+      string msg = str(format("%.2f,%f") % alt % sm[0]);
+      log_error(msg.c_str());
+      cout << msg << endl;
+    } catch(std::exception) {
+      log_error("no images in %.2f bin") % alt;
+    }
+  }
+}
+
+void prototype::get_slice(learn_correct::Params p) {
+  using boost::str;
+  illum::Lightfield slice;
+  //stereo::CameraPair cameras; // the camera metrics
+  //cameras = CameraPair(p.camera_sep, p.focal_length, p.pixel_sep);
+  // now read lightmap
+  log_error("LOADING slice from %s") % p.input;
+  slice.load(p.input);
+  log_error("AVERAGING slice");
+  Mat cfa_LR;
+  slice.getAverage(cfa_LR);
+  double minCount, maxCount;
+  slice.minMaxCount(&minCount, &maxCount);
+  log_error("min/max count = %f - %f") % minCount % maxCount;
+  log_error("DEMOSAICING average");
+  Mat bgr_LR = demosaic(cfa_LR, p.bayer_pattern) / 255; // lose the 16-bit bit depth
+  string outfile = "slice_average.png";
+  imwrite(outfile,bgr_LR);
+  log_error("WRITING slice average to %s") % outfile;
 }

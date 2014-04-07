@@ -88,6 +88,10 @@ int main(int argc, char **argv) {
 	prototype::test_dm();
       } else if(command=="afp") {
 	prototype::afp(params);
+      } else if(command=="interp") {
+	prototype::test_interpolation(params);
+      } else if(command=="slice") {
+	prototype::get_slice(params);
       } else {
 	cerr << "ERROR unknown command " << command << endl << copts << endl;
       }

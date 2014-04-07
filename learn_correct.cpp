@@ -112,8 +112,9 @@ public:
     fs::path outdir(_outdir.empty() ? params.lightmap_dir : _outdir);
     // now read lightmap
     log("LOADING lightmap from %s ...") % outdir;
-    return model.load(outdir.string());
-    log("LOADED lightmap from %s") % outdir;
+    int loaded = model.load(outdir.string());
+    log("LOADED %d lightmap slices from %s") % loaded % outdir;
+    return loaded;
   }
   // resume from an existing lightmap
   int resume(string _outdir="") {

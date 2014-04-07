@@ -8,4 +8,6 @@ namespace prototype {
   void test_flatness(learn_correct::Params);
   void test_dm();
   void afp(learn_correct::Params);
+  void test_interpolation(learn_correct::Params);
+  void get_slice(learn_correct::Params);
 }
