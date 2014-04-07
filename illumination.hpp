@@ -76,6 +76,7 @@ namespace illum {
 class illum::Lightfield {
   typedef cv::Mat Mat;
   typedef std::string string; 
+  string loadpath; // pathname to load from (in deferred mode)
   Mat sum; // running sum
   Mat count; // running count (fractional)
   void init(Mat image) {
@@ -161,6 +162,8 @@ public:
    * added
    */
   Mat getAverage() {
+    if(empty() && !loadpath.empty())
+      load(loadpath);
     if(empty())
       throw std::runtime_error("average requested before any images were added");
     // average image is just sum image divided by count image
@@ -242,6 +245,13 @@ public:
     bottom.copyTo(count);
     // and renormalize the average image to the count
     sum = sum.mul(count);
+  }
+  /**
+   * Defer loading this lightmap until the average is requested
+   * @param pathname the pathname to load from
+   */
+  void load_later(string pathname) {
+    loadpath = pathname;
   }
 };
 
@@ -429,7 +439,7 @@ public:
       p /= inpaths.str();
       if(fs::exists(p)) {
 	Slice<int>* slice = getSlice(count);
-	slice->getLightfield()->load(p.string());
+	slice->getLightfield()->load_later(p.string()); // defer load
 	loaded++;
       }
     }
