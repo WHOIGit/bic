@@ -398,14 +398,19 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
 	    log_error("unable to construct output path for %s") % task.inpath;
 	}
 	// regardless of which phase we're in, figure out if we really need to do learn/correct work on this inpath/outpath
-	bool should_learn = learn && !state.should_skip(task.inpath);
-	// log skip actions
-	if(learn && !should_learn) {
+	bool should_learn = learn;
+	if(should_learn && state.should_skip(task.inpath)) {
 	  log("SKIPPING LEARN %s - already in lightmap") % task.inpath;
+	  should_learn = false;
 	}
-	bool should_correct = correct && !outpath.empty() && !(p.skip_existing && fs::exists(outpath));
-	if(correct && !should_correct) {
-	  log("SKIPPING correct %s - output unspecified or already exists") % task.inpath;
+	bool should_correct = correct;
+	if(should_correct && outpath.empty()) {
+	  log_error("no output path for %s") % task.inpath;
+	  should_correct = false;
+	}
+	if(should_correct && p.skip_existing && fs::exists(outpath)) {
+	  log("SKIPPING correct %s - output image already exists") % task.inpath;
+	  should_correct = false;
 	}
 	// now queue up necessary work
 	if(should_learn && should_correct) {
