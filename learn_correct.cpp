@@ -399,7 +399,15 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
 	}
 	// regardless of which phase we're in, figure out if we really need to do learn/correct work on this inpath/outpath
 	bool should_learn = learn && !state.should_skip(task.inpath);
+	// log skip actions
+	if(learn && !should_learn) {
+	  log("SKIPPING LEARN %s - already in lightmap") % task.inpath;
+	}
 	bool should_correct = correct && !outpath.empty() && !(p.skip_existing && fs::exists(outpath));
+	if(correct && !should_correct) {
+	  log("SKIPPING correct %s - output unspecified or already exists") % task.inpath;
+	}
+	// now queue up necessary work
 	if(should_learn && should_correct) {
 	  // push an adaptive task on the queue
 	  io_service.post(boost::bind(adaptive_task, &state, task.inpath, task.alt, task.pitch, task.roll, outpath));
