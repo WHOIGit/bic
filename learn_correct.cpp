@@ -163,7 +163,7 @@ double compute_missing_alt(WorkState* state, double alt, cv::Mat cfa_LR, std::st
   // compute pixel offset
   int x = align(G, state->params.parallax_template_size) * 2;
   if(x <= 0)
-    throw std::runtime_error(str(format("unable to compute altitude from parallax for %s") % inpath));
+    throw std::runtime_error(str(format("SKIPPING %s: unable to compute altitude from parallax") % inpath));
   // convert to meters
   alt = state->cameras.xoff2alt(x);
   // log what just happened
@@ -175,16 +175,19 @@ double compute_missing_alt(WorkState* state, double alt, cv::Mat cfa_LR, std::st
 cv::Mat read_16u(string inpath) {
   cv::Mat img = cv::imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
   if(!img.data)
-    throw std::runtime_error(str(format("unable to read image file: %s") % inpath));
+    throw std::runtime_error(str(format("ERROR: unable to read image file: %s") % inpath));
   if(img.type() != CV_16U)
-    throw std::runtime_error(str(format("image is not 16-bit grayscale: %s") % inpath));
+    throw std::runtime_error(str(format("ERROR: image is not 16-bit grayscale: %s") % inpath));
   return img;
 }
 
 // learn one image
 void learn_one(WorkState* state, cv::Mat cfa_LR, string inpath, double alt=0, double pitch=0, double roll=0) {
-  state->model.addImage(cfa_LR, alt);
-  state->add_learned(inpath, alt, pitch, roll);
+  if(!state->model.addImage(cfa_LR, alt)) {
+    log("SKIPPING learn for %s - lightmap slice(s) overtrained");
+  } else {
+    state->add_learned(inpath, alt, pitch, roll);
+  }
 }
 
 // the learn task adds an image to a multilightfield model
@@ -202,7 +205,7 @@ void learn_task(WorkState* state, string inpath, double alt, double pitch, doubl
     learn_one(state, cfa_LR, inpath, alt, pitch, roll);
     log("LEARNED %s") % inpath;
   } catch(std::runtime_error const &e) {
-    log_error("ERROR learning %s: %s") % inpath % e.what();
+    log_error("DID NOT LEARN %s: %s") % inpath % e.what();
   } catch(std::exception) {
     log_error("ERROR learning %s") % inpath;
   }
@@ -264,7 +267,7 @@ void write_corrected(Params* params, cv::Mat rgb_LR, string outpath) {
   // now write the output image
   log("SAVING corrected image to %s") % outpath;
   if(!imwrite(outpath, rgb_LR))
-    throw std::runtime_error(str(format("unable to write output image to %s") % outpath));
+    throw std::runtime_error(str(format("ERROR: unable to write output image to %s") % outpath));
 }
 
 // the correct task corrects images
@@ -283,9 +286,9 @@ void correct_task(WorkState* state, string inpath, double alt, double pitch, dou
     Mat rgb_LR = correct_one(state, cfa_LR, inpath, alt, pitch, roll);
     // now write corrected image to outpath
     write_corrected(params, rgb_LR, outpath);
-  log("CORRECTED %s") % inpath;
+    log("CORRECTED %s") % inpath;
   } catch(std::runtime_error const &e) {
-    log_error("ERROR correcting %s: %s") % inpath % e.what();
+    log_error("DID NOT CORRECT %s: %s") % inpath % e.what();
   } catch(std::exception) {
     log_error("ERROR correcting %s") % inpath;
   }
@@ -305,7 +308,7 @@ void adaptive_task(WorkState* state, string inpath, double alt, double pitch, do
     learn_one(state, cfa_LR, inpath, alt, pitch, roll);
     log("LEARNED %s") % inpath;
   } catch(std::runtime_error const &e) {
-    log_error("ERROR learning %s: %s") % inpath % e.what();
+    log_error("DID NOT LEARN %s: %s") % inpath % e.what();
   } catch(std::exception) {
     log_error("ERROR learning %s") % inpath;
   }
@@ -320,7 +323,7 @@ void adaptive_task(WorkState* state, string inpath, double alt, double pitch, do
     write_corrected(params, rgb_LR, outpath);
     log("CORRECTED %s") % inpath;
   } catch(std::runtime_error const &e) {
-    log_error("ERROR correcting %s: %s") % inpath % e.what();
+    log_error("DID NOT CORRECT %s: %s") % inpath % e.what();
   } catch(std::exception) {
     log_error("ERROR correcting %s") % inpath;
   }

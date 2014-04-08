@@ -334,25 +334,36 @@ public:
    * Add an image to the lightfield
    * @param image the image to add
    * @param alt the altitude the image was taken at
+   * @return number of lightfield slices affected (0-2)
    */
-  void addImage(Mat image, double alt) {
+  int addImage(Mat image, double alt) {
+    int n_slices = 0;
     int i = alt / alt_step;
     int j = i + 1;
     double Wi = ((alt_step * j) - alt) / alt_step;
     double Wj = (alt - (alt_step * i)) / alt_step;
     Slice<int>* slice = getSlice(i);
     boost::mutex* mutex = slice->get_mutex();
+    double minCount, maxCount;
     { // protect slice with mutex to prevent concurrent writes
       boost::lock_guard<boost::mutex> lock(*mutex);
-      slice->getLightfield()->addImage(image, Wi);
+      slice->getLightfield()->minMaxCount(&minCount, &maxCount);
+      if(minCount < overtrain) { // skip image if overtrained
+	slice->getLightfield()->addImage(image, Wi);
+	n_slices++;
+      }
     }
     slice = getSlice(j);
     mutex = slice->get_mutex();
     { // protect slice with mutex to prevent concurrent writes
       boost::lock_guard<boost::mutex> lock(*mutex);
-      slice->getLightfield()->addImage(image, Wj);
+      slice->getLightfield()->minMaxCount(&minCount, &maxCount);
+      if(minCount < overtrain) { // skip image if overtrained
+	slice->getLightfield()->addImage(image, Wj);
+	n_slices++;
+      }
     }
-    return;
+    return n_slices;
   }
   /**
    * Get the average image at the given altitude.
@@ -467,7 +478,7 @@ public:
    * @param pitch the pitch of the vehicle
    * @param roll the roll of the vehicle
    */
-  void addImage(Mat image, double alt, double pitch, double roll) {
+  int addImage(Mat image, double alt, double pitch, double roll) {
     // compute distance map
     int width = image.size().width;
     int height = image.size().height;
@@ -503,6 +514,7 @@ public:
       }
       interp::dist_weight(D, W, alt_step, i++);
     }
+    return 0;
   }
   /**
    * Get the average image at the given altitude.
