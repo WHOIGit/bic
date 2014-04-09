@@ -282,12 +282,14 @@ namespace learn_correct {
 	// second field is outpath, but that's optional in learn phase,
 	// and so it could be altitude.
 	alt = atof(fields.at(f).c_str());
-	if(alt != 0) // we got a nonzero altitude
-	  f++;
-	outpath = fields.at(f++);
-	// if we've reached this point, then there's an outpath so
-	// the next field is altitude.
-	alt = atof(fields.at(f++).c_str());
+	if(alt != 0) { // we got a nonzero altitude
+	  f++; // advance, expecting an outpath followed by altitude
+	} else {
+	  outpath = fields.at(f++);
+	  // if we've reached this point, then there's an outpath so
+	  // the next field is altitude.
+	  alt = atof(fields.at(f++).c_str());
+	}
 	double pitch_deg = atof(fields.at(f++).c_str());
 	double roll_deg = atof(fields.at(f++).c_str());
 	pitch = M_PI * pitch_deg / 180.0; // convert pitch to radiasn

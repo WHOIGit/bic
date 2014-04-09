@@ -301,13 +301,25 @@ void correct_task(WorkState* state, string inpath, double alt, double pitch, dou
 void adaptive_task(WorkState* state, string inpath, double alt, double pitch, double roll, string outpath) {
   using cv::Mat;
   log("START ADAPTIVE %s %.2f") % inpath % alt;
-  // read RAW image
-  Mat cfa_LR = read_16u(inpath);
-  log("READ %s") % inpath;
-  // if altitude is out of range, compute from parallax
-  alt = compute_missing_alt(state, alt, cfa_LR, inpath);
-  // then learn the image
+  Mat cfa_LR;
   try {
+    // read RAW image
+    cfa_LR = read_16u(inpath);
+    log("READ %s") % inpath;
+  } catch(std::exception) {
+    log_error("ERROR failed to read %s") % inpath;
+    return; // can't do anything if we can't read the image
+  }
+  // get a good altitude
+  try {
+    // if altitude is out of range, compute from parallax
+    alt = compute_missing_alt(state, alt, cfa_LR, inpath);
+  } catch(std::exception) {
+    log_error("NO ALTITUDE available for %s") % inpath;
+    return; // the altitude is known to be bad
+  }
+  try {
+    // then learn the image
     learn_one(state, cfa_LR, inpath, alt, pitch, roll);
     log("LEARNED %s") % inpath;
   } catch(std::runtime_error const &e) {

@@ -382,27 +382,27 @@ public:
     int j = i + 1;
     double Wi = ((alt_step * j) - alt) / alt_step;
     double Wj = (alt - (alt_step * i)) / alt_step;
+    Mat Ai;
+    double minCountI, maxCountI;
     Slice<int>* slice = getSlice(i);
     boost::mutex* mutex = slice->get_mutex();
-    Mat Ai;
-    double minCount, maxCount;
     { // protect slice with mutex to prevent concurrent writes
       boost::lock_guard<boost::mutex> lock(*mutex);
       Ai = slice->getLightfield()->getAverage();
-      slice->getLightfield()->minMaxCount(&minCount, &maxCount);
+      slice->getLightfield()->minMaxCount(&minCountI, &maxCountI);
     }
-    if(minCount < undertrain)
-      throw std::runtime_error(str(format("lightmap is undertrained at %.2f") % (i*alt_step)));
+    Mat Aj;
+    double minCountJ, maxCountJ;
     slice = getSlice(j);
     mutex = slice->get_mutex();
-    Mat Aj;
     { // protect slice with mutex to prevent concurrent writes
       boost::lock_guard<boost::mutex> lock(*mutex);
       Aj = slice->getLightfield()->getAverage();
-      slice->getLightfield()->minMaxCount(&minCount, &maxCount);
+      slice->getLightfield()->minMaxCount(&minCountJ, &maxCountJ);
     }
-    if(minCount < undertrain)
-      throw std::runtime_error(str(format("lightmap is undertrained at %.2f") % (j*alt_step)));
+    double min_images = (minCountI * Wi) + (minCountJ * Wj);
+    if(min_images < undertrain)
+      throw std::runtime_error(str(format("lightmap is undertrained at %.2f with %.2f images") % alt % min_images));
     // ensure destination image is not empty
     _dst.create(Ai.size(), Ai.type());
     Mat dst = _dst.getMat();
