@@ -299,6 +299,7 @@ public:
  */
 class illum::MultiLightfield {
 protected:
+  boost::mutex* slices_mutex;
   typedef cv::Mat Mat;
   typedef std::string string; 
   typename std::vector<Slice<int>* > slices; // altitude slices
@@ -306,6 +307,7 @@ protected:
   int undertrain;
   int overtrain;
   Slice<int>* getSlice(int i) { // accessor for slice by altitude bin
+    boost::lock_guard<boost::mutex> lock(*slices_mutex); // protect entire method with mutex
     typename std::vector<Slice<int>* >::iterator it = slices.begin();
     for(; it != slices.end(); ++it) {
       Slice<int>* slice = *it;
@@ -326,6 +328,7 @@ public:
    * @param overtrain overtraining threshold (in number of images)
    */
   MultiLightfield(double step_m=0.1, int undertrain=20, int overtrain=65535) {
+    slices_mutex = new boost::mutex();
     alt_step = step_m;
     this->undertrain = undertrain;
     this->overtrain = overtrain;
