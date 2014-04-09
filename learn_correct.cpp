@@ -149,6 +149,9 @@ public:
 double compute_missing_alt(WorkState* state, double alt, cv::Mat cfa_LR, std::string inpath) {
   using stereo::align;
   using cv::Mat;
+  // if images are not stereo, do not attempt to compute altitude from parallax
+  if(!state->params.stereo)
+    return alt;
   // if altitude is good, don't recompute it
   if(!state->params.alt_from_parallax && alt > 0 && alt < MAX_ALTITUDE)
     return alt;
