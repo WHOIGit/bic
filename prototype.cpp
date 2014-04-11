@@ -298,3 +298,49 @@ void prototype::get_slice(learn_correct::Params p) {
   imwrite(outfile,bgr_LR);
   log_error("WRITING slice average to %s") % outfile;
 }
+
+void avg_alt_task(learn_correct::Params* params, std::string inpath, double alt) {
+  try  {
+    Mat cfa_LR = cv::imread(inpath);
+    Scalar sm = cv::mean(cfa_LR);
+    log("%.2f,%f") % alt % sm[0];
+  } catch(std::exception) {
+    log_error("ERROR for %s") % inpath;
+  }
+}
+
+void prototype::avg_by_alt(learn_correct::Params params) {
+  using std::cerr;
+  using std::endl;
+  using cv::Mat;
+  // before any OpenCV operations are done, set global error flag
+  cv::setBreakOnError(true);
+  // post all work
+  boost::asio::io_service io_service;
+  boost::thread_group workers;
+  // start up the work threads
+  // use the work object to keep threads alive before jobs are posted
+  // use auto_ptr so we can indicate that no more jobs will be posted
+  auto_ptr<boost::asio::io_service::work> work(new boost::asio::io_service::work(io_service));
+  // create the thread pool
+  for(int i = 0; i < N_THREADS; i++) {
+    workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
+  }
+  // post jobs
+  istream *csv_in = learn_correct::get_input(params);
+  string line;
+  while(getline(*csv_in,line)) { // read pathames from a file
+    try {
+      learn_correct::Task task(line);
+      io_service.post(boost::bind(avg_alt_task, &params, task.inpath, task.alt));
+    } catch(std::runtime_error const &e) {
+      log_error("ERROR parsing input metadata: %s") % e.what();
+    } catch(std::exception) {
+      log_error("ERROR parsing input metadata");
+    }
+  }
+  // destroy the work object to indicate that there are no more jobs
+  work.reset();
+  // now run all pending jobs to completion
+  workers.join_all();
+}

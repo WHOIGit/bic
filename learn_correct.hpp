@@ -9,6 +9,8 @@
 #define H2O_ADJUSTMENT 1.2 // hardcoded parallax scaling factor
 #define MAX_ALTITUDE 10 // hardcoded maximum altitude; sanity check
 
+// program option names. these are dynamically associated with
+// types, abbreviations, and default values in main.cpp
 #define OPT_INPUT "input" // input CSV file (default stdin)
 #define OPT_LIGHTMAP_DIR "lightmap" // lightmap directory
 #define OPT_BAYER_PATTERN "bayer" // bayer pattern
