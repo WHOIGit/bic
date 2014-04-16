@@ -34,14 +34,12 @@ void illum::correct(cv::InputArray _src, cv::OutputArray _dst, cv::Mat lightfiel
     lightfield32f = lightfield;
   }
   // now compute corrected image in its floating-point representation
-  Mat correct32f = src32f / lightfield32f;
+  Mat correct32f = (src32f / lightfield32f) * 0.33;
   // now we need to convert the values to the result type,
   // including the scaling operation
   if(dst.depth()==CV_8U)
-    correct32f *= 85;
+    correct32f *= 255;
   if(dst.depth()==CV_16U)
-    correct32f *= 21843;
-  if(dst.depth()==CV_32F)
-    correct32f *= 0.33;
+    correct32f *= 65535;
   correct32f.convertTo(dst, dst.type());
 }

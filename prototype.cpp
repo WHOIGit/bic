@@ -247,9 +247,9 @@ void prototype::afp(learn_correct::Params p) {
   }
   stereo::CameraPair cameras(p.camera_sep, p.focal_length, p.pixel_sep);
   Mat y_LR;
-  cfa_channel(cfa_LR, y_LR, 1, 0);
+  cfa_channel(cfa_LR, y_LR, 1, 0); // FIXME hardcoded
   int xoff = stereo::align(y_LR);
-  double alt = cameras.xoff2alt(xoff);
+  double alt = cameras.xoff2alt(xoff*2);
   cout << xoff << "px, " << alt << "m" << endl;
 }
 
@@ -299,11 +299,62 @@ void prototype::get_slice(learn_correct::Params p) {
   log_error("WRITING slice average to %s") % outfile;
 }
 
+
+void composite_overlap(Mat y_LR, int xoff, OutputArray _y_L, OutputArray _y_R) {
+  int x2 = xoff / 2;
+  Mat xMap, yMap;
+  int w = y_LR.cols;
+  int h = y_LR.rows;
+  xMap.create(y_LR.size(), CV_32F);
+  yMap.create(y_LR.size(), CV_32F);
+  int c2 = w/2;
+  for(int x = 0; x < w; x++) {
+    for(int y = 0; y < h; y++) {
+      yMap.at<float>(y,x) = y;
+      if(x < c2) {
+	xMap.at<float>(y,x) = x + c2 - x2;
+      } else {
+	xMap.at<float>(y,x) = -1;
+      }
+    }
+  }
+  Mat y_O;
+  remap(y_LR,y_O,xMap,yMap,INTER_NEAREST);
+  int o_width = w/2-x2;
+  Rect overlap = Rect(x2,0,o_width,h);
+  Mat y_L(y_LR, overlap);
+  Mat y_R(y_O,overlap);
+  _y_L.create(Size(o_width,h),y_LR.type());
+  y_L.copyTo(_y_L);
+  _y_R.create(Size(o_width,h),y_LR.type());
+  y_R.copyTo(_y_R);
+}
+
 void avg_alt_task(learn_correct::Params* params, std::string inpath, double alt) {
   try  {
-    Mat cfa_LR = cv::imread(inpath);
-    Scalar sm = cv::mean(cfa_LR);
-    log("%.2f,%f") % alt % sm[0];
+    Mat cfa_LR = cv::imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
+    /*
+    Mat bgr_LR = demosaic(cfa_LR, params->bayer_pattern);
+    Scalar avg = cv::mean(bgr_LR);
+    double avg_red = avg[2];
+    double avg_blue = avg[0];
+    double avg_green = avg[1];
+    log("%.2f,%f,%f,%f") % alt % avg_red % avg_blue % avg_green;
+    */
+    // FIXME debug. compute offset and variance from a-f-p
+    double afp_var;
+    Mat G;
+    if(params->bayer_pattern[0]=='g') {
+      cfa_channel(cfa_LR, G, 0, 0);
+    } else {
+      cfa_channel(cfa_LR, G, 1, 0);
+    }
+    // compute pixel offset
+    int xoff = stereo::align(G, params->parallax_template_size, &afp_var) * 2;
+    if(xoff == 0)
+      return;
+    // report
+    log("%s,%d,%.0f") % inpath % xoff % afp_var;
   } catch(std::exception) {
     log_error("ERROR for %s") % inpath;
   }
@@ -323,7 +374,7 @@ void prototype::avg_by_alt(learn_correct::Params params) {
   // use auto_ptr so we can indicate that no more jobs will be posted
   auto_ptr<boost::asio::io_service::work> work(new boost::asio::io_service::work(io_service));
   // create the thread pool
-  for(int i = 0; i < N_THREADS; i++) {
+  for(int i = 0; i < params.n_threads; i++) {
     workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
   }
   // post jobs
@@ -343,4 +394,67 @@ void prototype::avg_by_alt(learn_correct::Params params) {
   work.reset();
   // now run all pending jobs to completion
   workers.join_all();
+}
+
+void prototype::redcyan(learn_correct::Params params) {
+  using boost::algorithm::ends_with;
+  using namespace cv;
+  using stereo::align;
+  using namespace std;
+  Mat in_LR;
+  if(ends_with(params.input,"tiff") || ends_with(params.input,"tif")) {
+    in_LR = imread( params.input, CV_LOAD_IMAGE_ANYDEPTH );
+  } else {
+    in_LR = imread(params.input);
+    resize(in_LR, in_LR, Size(0,0), 0.5, 0.5); // downscale to 0.5 size
+  }
+
+  // now, compute offset
+
+  // compute from parallax
+
+  Mat G;
+  if(in_LR.channels() == 1) {   // if raw, pull green channel
+    cout << "Extracting green channel of RAW image" << endl;
+    if(params.bayer_pattern[0]=='g') {
+      cfa_channel(in_LR, G, 0, 0);
+    } else {
+      cfa_channel(in_LR, G, 1, 0);
+    }
+  } else { // otherwise convert to gray
+    // assume 8-bit
+    cout << "Converting color image to grayscale" << endl;
+    cvtColor(in_LR, G, CV_BGR2GRAY);
+  }
+
+  cout << "aligning ..." << endl;
+  // compute pixel offset
+  double var;
+  int xoff = align(G, params.parallax_template_size,&var);
+  int x2 = xoff;
+  xoff *= 2;
+  if(xoff <= 0) // bad alignment
+    throw std::runtime_error("unable to compute altitude from parallax");
+  // convert to meters
+  double alt = (params.camera_sep * params.focal_length * 1.2) / (xoff * params.pixel_sep);
+
+  cout << "offset = " << xoff << endl;
+  cout << "alt = " << alt << endl;
+  cout << "variance = " << var << endl;
+
+  Mat y_L, y_R;
+  composite_overlap(G,xoff,y_L,y_R);
+  // brighten
+  y_L *= 2;
+  y_R *= 2;
+  vector<Mat> ch;
+  ch.push_back(y_R/2);
+  ch.push_back(y_R/2);
+  ch.push_back(y_L);
+  Mat redcyan;
+  merge(ch, redcyan);
+  namedWindow( "Display Image", CV_WINDOW_AUTOSIZE );
+  imshow( "Display Image", redcyan );
+
+  waitKey(0);
 }

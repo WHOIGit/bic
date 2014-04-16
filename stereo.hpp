@@ -23,10 +23,12 @@ namespace stereo {
    * @param template_size the size of the image patch used to find
    * correspondences. Should be large enough to include image features
    * likely to be found in both images.
+   * @param if sample variance is needed (a metric of quality), a pointer
+   * to a variable to use to return it
    *
    * @return the pixel offset between the images
    */
-  int align(cv::Mat y_LR, int template_size=64);
+  int align(cv::Mat y_LR, int template_size=64, double* vary=NULL);
   /**
    * The metrics associated with a stereo pair of cameras. Provides
    * conversions and utilities for computing where corresponding points

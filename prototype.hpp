@@ -11,4 +11,5 @@ namespace prototype {
   void test_interpolation(learn_correct::Params);
   void get_slice(learn_correct::Params);
   void avg_by_alt(learn_correct::Params);
+  void redcyan(learn_correct::Params);
 }

@@ -96,6 +96,8 @@ int main(int argc, char **argv) {
 	prototype::get_slice(params);
       } else if(command=="aba") {
 	prototype::avg_by_alt(params);
+      } else if(command=="redcyan") {
+	prototype::redcyan(params);
       } else {
 	cerr << "ERROR unknown command " << command << endl << copts << endl;
       }

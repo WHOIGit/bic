@@ -10,13 +10,14 @@
 #include <boost/accumulators/accumulators.hpp>
 #include <boost/accumulators/statistics/stats.hpp>
 #include <boost/accumulators/statistics/median.hpp>
+#include <boost/accumulators/statistics/variance.hpp>
 
 #include "stereo.hpp"
 #include "demosaic.hpp"
 
 #define N_THREADS 12 // FIXME hardcoded thread count
 
-int stereo::align(cv::Mat y_LR_in, int template_size) {
+int stereo::align(cv::Mat y_LR_in, int template_size, double* vary) {
   using namespace std;
   using namespace cv;
   Mat y_LR;
@@ -40,9 +41,10 @@ int stereo::align(cv::Mat y_LR_in, int template_size) {
   // take at least SAMPLE_SIZE samples
   int SAMPLE_SIZE=5, n=0;
   // try at least GIVE_UP times to get samples
-  int GIVE_UP=100, g=0;
+  int GIVE_UP=15, g=0;
   using namespace boost::accumulators;
   accumulator_set<int, stats<tag::median > > samples;
+  accumulator_set<int, stats<tag::variance > > sample_var;
   while(n < SAMPLE_SIZE && g < GIVE_UP) {
     g++; // every attempt counts towards giving up
     int x = rng.uniform(ts*2,w2-ts*4);
@@ -65,9 +67,17 @@ int stereo::align(cv::Mat y_LR_in, int template_size) {
       continue;
     }
     // we have a sample, this counts towards sample size
-    samples(x-(mx-w2));
+    int sample_offset = x-(mx-w2);
+    samples(sample_offset);
+    sample_var(sample_offset);
     n++;
   }
+  if(vary) {
+    *vary = variance(sample_var);
+  }
+  if(g == GIVE_UP)
+    return 0;
+  // otherwise we're OK
   return median(samples);
 }
 
