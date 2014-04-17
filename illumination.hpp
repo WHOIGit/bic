@@ -383,7 +383,7 @@ public:
     double Wi = ((alt_step * j) - alt) / alt_step;
     double Wj = (alt - (alt_step * i)) / alt_step;
     Mat Ai;
-    double minCountI, maxCountI;
+    double minCountI, maxCountI, countI;
     Slice<int>* slice = getSlice(i);
     boost::mutex* mutex = slice->get_mutex();
     { // protect slice with mutex to prevent concurrent writes
@@ -392,7 +392,7 @@ public:
       slice->getLightfield()->minMaxCount(&minCountI, &maxCountI);
     }
     Mat Aj;
-    double minCountJ, maxCountJ;
+    double minCountJ, maxCountJ, countJ;
     slice = getSlice(j);
     mutex = slice->get_mutex();
     { // protect slice with mutex to prevent concurrent writes
@@ -400,9 +400,24 @@ public:
       Aj = slice->getLightfield()->getAverage();
       slice->getLightfield()->minMaxCount(&minCountJ, &maxCountJ);
     }
-    double min_images = (minCountI * Wi) + (minCountJ * Wj);
-    if(min_images < undertrain)
-      throw std::runtime_error(str(format("lightmap is undertrained at %.2f with %.2f images") % alt % min_images));
+    // determine training level of each image
+    countI = minCountI; // FIXME is this the right metric for distance-mapping case?
+    countJ = minCountJ; // FIXME is this the right metric for distance-mapping case?
+    if(countI < undertrain && countJ < undertrain) {
+      throw std::runtime_error(str(format("lightmap is undertrained at %.2f") % alt));
+    } else if(countI < undertrain) { // I is undertrained
+      if(Wi > Wj) { // and we're closest to I
+	throw std::runtime_error(str(format("lightmap is undertrained at %.2f") % alt));
+      } else { // or we're closer to J
+	Wi = 0; Wj = 1; // do not use slice I and just use slice J
+      }
+    } else if(countJ < undertrain) { // J is undertrained
+      if(Wj > Wi) { // and we're closest to J
+	throw std::runtime_error(str(format("lightmap is undertrained at %.2f") % alt));
+      } else { // or we're closest to I
+	Wi = 1; Wj = 0; // do not use slice J and just use slice I
+      }
+    }
     // ensure destination image is not empty
     _dst.create(Ai.size(), Ai.type());
     Mat dst = _dst.getMat();
