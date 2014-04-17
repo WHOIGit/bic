@@ -8,6 +8,7 @@
 #include <boost/format.hpp>
 #include <boost/tokenizer.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 
 #include "learn_correct.hpp"
@@ -160,6 +161,7 @@ void prototype::test_flatness(learn_correct::Params params) {
   string line;
   while(getline(*csv_in,line)) { // read pathames from a file
     try {
+      boost::algorithm::trim_right(line);
       string outpath = line;
       if(fs::exists(outpath)) {
 	io_service.post(boost::bind(out_flat_task, &params, &R, &G, &B, &correctMutex, outpath));

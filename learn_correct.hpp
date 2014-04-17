@@ -311,6 +311,7 @@ namespace learn_correct {
     }
     Task(std::string line) {
       std::vector<std::string> fields;
+      boost::algorithm::trim_right(line); // deal with \r\n
       Tokenizer tok(line);
       fields.assign(tok.begin(),tok.end());
       config(fields);

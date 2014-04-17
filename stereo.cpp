@@ -75,11 +75,13 @@ int stereo::align(cv::Mat y_LR_in, int template_size, double* vary) {
   if(vary) {
     *vary = variance(sample_var);
   }
-  if(g == GIVE_UP)
-    return 0;
-  // otherwise we're OK
-  return median(samples);
+  if(n >= SAMPLE_SIZE) // do we have enough samples?
+    return median(samples); // return median
+  else // otherwise, this image won't align
+    return 0; // indicate alignment failure with 0
 }
+
+// FIXME the stuff below this point is not production code
 
 cv::Mat get_green(cv::Mat cfa_LR) {
   cv::Mat green;

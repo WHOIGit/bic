@@ -70,6 +70,7 @@ private:
     std::ifstream sin(skipfile.string().c_str());
     string line;
     while(getline(sin,line)) {
+      boost::algorithm::trim_right(line);
       learned.push_back(line); // push CSV record to learned
       Tokenizer tok(line);
       string infile = *tok.begin();

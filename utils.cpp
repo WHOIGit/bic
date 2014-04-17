@@ -4,6 +4,7 @@
 #include <boost/asio.hpp>
 #include <boost/tokenizer.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/algorithm/string.hpp>
 
 #include "utils.hpp"
 #include "learn_correct.hpp"
@@ -69,6 +70,7 @@ void utils::alt_from_stereo(Params params) {
   string line;
   while(getline(*csv_in,line)) { // read pathames from a file
     try {
+      boost::algorithm::trim_right(line);
       string inpath = line;
       if(fs::exists(inpath)) {
 	io_service.post(boost::bind(alt_task, &params, inpath));
