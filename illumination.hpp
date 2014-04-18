@@ -1,3 +1,4 @@
+#pragma once
 #include <exception>
 #include <stdexcept>
 #include <string>
@@ -440,7 +441,7 @@ public:
     for(; it != slices.end(); ++it) {
       Slice<int>* slice = *it;
       illum::Lightfield* lf = slice->getLightfield();
-      if(!lf->empty()) { // FIXME should check for undertraining?
+      if(!lf->empty()) {
 	int count = slice->getAlt();
 	std::stringstream outpaths;
 	outpaths << "slice_" << count << ".tiff";

@@ -81,6 +81,44 @@ int stereo::align(cv::Mat y_LR_in, int template_size, double* vary) {
     return 0; // indicate alignment failure with 0
 }
 
+/**
+ * Given a stereo pair and an x offset, return the overlap region
+ * of the left camera image.
+ * @param LR a left/right side-by-side stereo image pair
+ */
+cv::Rect stereo::overlap_L(cv::Mat LR, int xoff) {
+  int ph = LR.size().height;
+  int pw = LR.size().width;
+  return cv::Rect(xoff,0,pw/2-xoff,ph);
+}
+/**
+ * Given a stereo pair and an x offset, return the overlap region
+ * of the right camera image.
+ * @param LR a left/right side-by-side stereo image pair
+ */
+cv::Rect stereo::overlap_R(cv::Mat LR, int xoff) {
+  int ph = LR.size().height;
+  int pw = LR.size().width;
+  return cv::Rect(pw/2,0,pw/2-xoff,ph);
+}
+/**
+ * Given a stereo pair and x offset, generate a crosseye view
+ * of just the overlapping region. If no offset is given,
+ * just swap the sides of the image
+ */
+cv::Mat stereo::xeye(cv::Mat LR, int xoff) {
+  cv::Mat L(LR, overlap_L(LR, xoff));
+  cv::Mat R(LR, overlap_R(LR, xoff));
+  int w = L.size().width;
+  int h = L.size().height;
+  cv::Mat X = cv::Mat::zeros(cv::Size(w*2,h), LR.type());
+  cv::Mat XL(X, cv::Rect(0,0,w,h));
+  cv::Mat XR(X, cv::Rect(w,0,w,h));
+  L.copyTo(XR);
+  R.copyTo(XL);
+  return X;
+}
+
 // FIXME the stuff below this point is not production code
 
 cv::Mat get_green(cv::Mat cfa_LR) {

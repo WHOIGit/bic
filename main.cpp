@@ -82,6 +82,8 @@ int main(int argc, char **argv) {
 	utils::alt_from_stereo(params);
       } else if(command=="view") {
 	utils::view_raw(params);
+      } else if(command=="xeye") {
+	utils::view_xeye(params);
       } else if(command=="xoff") {
 	stereo::xoff_test(argc,argv);
       } else if(command=="res") {

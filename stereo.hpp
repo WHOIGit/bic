@@ -30,6 +30,24 @@ namespace stereo {
    */
   int align(cv::Mat y_LR, int template_size=64, double* vary=NULL);
   /**
+   * Given a stereo pair and an x offset, return the overlap region
+   * of the left camera image.
+   * @param LR a left/right side-by-side stereo image pair
+   */
+  cv::Rect overlap_L(cv::Mat LR, int xoff=0);
+  /**
+   * Given a stereo pair and an x offset, return the overlap region
+   * of the right camera image.
+   * @param LR a left/right side-by-side stereo image pair
+   */
+  cv::Rect overlap_R(cv::Mat LR, int xoff=0);
+  /**
+   * Given a stereo pair and x offset, generate a crosseye view
+   * of just the overlapping region. If no offset is given,
+   * just swap the sides of the image
+   */
+  cv::Mat xeye(cv::Mat LR, int xoff=0);
+  /**
    * The metrics associated with a stereo pair of cameras. Provides
    * conversions and utilities for computing where corresponding points
    * lie in image pairs.
@@ -72,26 +90,6 @@ namespace stereo {
      */
     double alt2xoff(double alt) {
       return (camera_sep * focal_length * h2o_adjustment) / (alt * pixel_sep);
-    }
-    /**
-     * Given a stereo pair and an x offset, return the overlap region
-     * of the left camera image.
-     * @param LR a left/right side-by-side stereo image pair
-     */
-    cv::Rect overlap_L(cv::Mat LR, int xoff) {
-      int ph = LR.size().height;
-      int pw = LR.size().width;
-      return cv::Rect(xoff,0,pw/2-xoff,ph);
-    }
-    /**
-     * Given a stereo pair and an x offset, return the overlap region
-     * of the right camera image.
-     * @param LR a left/right side-by-side stereo image pair
-     */
-    cv::Rect overlap_R(cv::Mat LR, int xoff) {
-      int ph = LR.size().height;
-      int pw = LR.size().width;
-      return cv::Rect(pw/2,0,pw/2-xoff,ph);
     }
   };
   //

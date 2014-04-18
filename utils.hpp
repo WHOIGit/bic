@@ -17,4 +17,8 @@ namespace utils {
    * so it doesn't look black, then displays it on the screen.
    */
   void view_raw(learn_correct::Params);
+  /**
+   * View an image as a crosseye stereo image
+   */
+  void view_xeye(learn_correct::Params);
 }

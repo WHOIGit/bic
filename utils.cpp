@@ -107,3 +107,18 @@ void utils::view_raw(Params params) {
   imshow(params.input.c_str(), bgr_LR );
   waitKey(0);
 }
+
+void utils::view_xeye(Params params) {
+  // assumes -i is a color left/right image
+  Mat in_LR = imread(params.input);
+  Mat y_LR;
+  cvtColor(in_LR, y_LR, CV_BGR2GRAY);
+  int xoff = stereo::align(y_LR);
+  //int xoff = 0;
+  Mat X = stereo::xeye(in_LR, xoff);
+  // resize
+  cv::resize(X, X, cv::Size(0,0), 0.66, 0.66);
+  namedWindow(params.input.c_str(), CV_WINDOW_AUTOSIZE );
+  imshow(params.input.c_str(), X );
+  waitKey(0);
+}
