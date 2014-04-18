@@ -417,12 +417,16 @@ void prototype::redcyan(learn_correct::Params params) {
 
   Mat G;
   if(in_LR.channels() == 1) {   // if raw, pull green channel
+    // brighten
+    double avg = mean(in_LR)[0];
+    in_LR *= 32768.0 / avg;
     cout << "Extracting green channel of RAW image" << endl;
     if(params.bayer_pattern[0]=='g') {
       cfa_channel(in_LR, G, 0, 0);
     } else {
       cfa_channel(in_LR, G, 1, 0);
     }
+    // brighten
   } else { // otherwise convert to gray
     // assume 8-bit
     cout << "Converting color image to grayscale" << endl;
@@ -447,8 +451,6 @@ void prototype::redcyan(learn_correct::Params params) {
   Mat y_L, y_R;
   composite_overlap(G,xoff,y_L,y_R);
   // brighten
-  y_L *= 2;
-  y_R *= 2;
   vector<Mat> ch;
   ch.push_back(y_R/2);
   ch.push_back(y_R/2);

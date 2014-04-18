@@ -88,3 +88,22 @@ void utils::alt_from_stereo(Params params) {
   // now run all pending jobs to completion
   workers.join_all();
 }
+
+void utils::view_raw(Params params) {
+  using boost::algorithm::ends_with;
+  using namespace cv;
+  using namespace std;
+  string terst = params.input;
+  boost::to_lower(terst);
+  assert(ends_with(terst,"tiff") || ends_with(terst,"tif"));
+  Mat y_LR = imread( params.input, CV_LOAD_IMAGE_ANYDEPTH );
+  // brighten
+  double avg = mean(y_LR)[0];
+  y_LR *= 32768.0 / avg;
+  // demosaic
+  Mat bgr_LR = demosaic(y_LR, params.bayer_pattern);
+  // display
+  namedWindow(params.input.c_str(), CV_WINDOW_AUTOSIZE );
+  imshow(params.input.c_str(), bgr_LR );
+  waitKey(0);
+}

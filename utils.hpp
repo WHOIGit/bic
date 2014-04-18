@@ -12,4 +12,9 @@ namespace utils {
    * altitude.
    */
   void alt_from_stereo(learn_correct::Params);
+  /**
+   * View a RAW image. Demosaics the image and adjusts its histogram
+   * so it doesn't look black, then displays it on the screen.
+   */
+  void view_raw(learn_correct::Params);
 }
