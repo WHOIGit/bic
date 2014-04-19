@@ -39,9 +39,9 @@ int stereo::align(cv::Mat y_LR_in, int template_size, double* vary) {
   uint64 seedValue = uint64(seedPixel);
   RNG rng(seedValue); // always use same seed
   // take at least SAMPLE_SIZE samples
-  int SAMPLE_SIZE=5, n=0;
+  int SAMPLE_SIZE=5, n=0; // FIXME magic number
   // try at least GIVE_UP times to get samples
-  int GIVE_UP=15, g=0;
+  int GIVE_UP=15, g=0; // FIXME magic number
   using namespace boost::accumulators;
   accumulator_set<int, stats<tag::median > > samples;
   accumulator_set<int, stats<tag::variance > > sample_var;

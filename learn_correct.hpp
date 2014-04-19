@@ -6,7 +6,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/thread.hpp>
 
-#define H2O_ADJUSTMENT 1.2 // hardcoded parallax scaling factor
+#define H2O_ADJUSTMENT 1.2 // hardcoded parallax scaling factor (FIXME magic number?)
 #define MAX_ALTITUDE 10 // hardcoded maximum altitude; sanity check
 
 // program option names. these are dynamically associated with
