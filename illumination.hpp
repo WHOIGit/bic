@@ -186,7 +186,7 @@ public:
    * @param ensure_unity adjust lightmap counts so that they are >= 1
    * to prevent zeros in the count image
    */
-  void save(string pathname, bool ensure_unity=true) {
+  void save(string pathname, bool ensure_unity=false) {
     using cv::Rect;
     using boost::algorithm::ends_with;
     string lp = pathname;

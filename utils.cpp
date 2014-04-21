@@ -101,7 +101,7 @@ void utils::view_raw(Params params) {
   double avg = mean(y_LR)[0];
   y_LR *= 32768.0 / avg;
   // demosaic
-  Mat bgr_LR = demosaic(y_LR, params.bayer_pattern);
+  Mat bgr_LR = demosaic_thumb_lq(y_LR, params.bayer_pattern);
   // display
   namedWindow(params.input.c_str(), CV_WINDOW_AUTOSIZE );
   imshow(params.input.c_str(), bgr_LR );

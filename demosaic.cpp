@@ -166,6 +166,39 @@ Mat demosaic(Mat image_in, string cfaPattern) {
   return out;
 }
 
+void cfa_offset(std::string channel, std::string cfaPattern, int* off_x, int *off_y) {
+  string::iterator it = cfaPattern.begin();
+  for(int x = 0; x < 2; x++) {
+    for(int y = 0; y < 2; y++) {
+      if(*it++ == channel[0]) {
+	*off_x = x;
+	*off_y = y;
+	return;
+      }
+    }
+  }
+}
+
+Mat demosaic_thumb_lq(Mat cfa, string cfaPattern) {
+  int h, w;
+  Size S = cfa.size();
+  h = S.height/2;
+  w = S.width/2;
+  Mat quads;
+  cfa_quad(cfa, quads);
+  vector<Mat> BGR(3);
+  int x, y;
+  cfa_offset("b", cfaPattern, &x, &y);
+  BGR[0] = Mat(quads, Rect(x*w, y*h, w, h));
+  cfa_offset("g", cfaPattern, &x, &y);
+  BGR[1] = Mat(quads, Rect(x*w, y*h, w, h));
+  cfa_offset("r", cfaPattern, &x, &y);
+  BGR[2] = Mat(quads, Rect(x*w, y*h, w, h));
+  Mat color;
+  merge(BGR, color);
+  return color;
+}
+
 /// utility
 
 // cv::remap cannot operate in-place, so this function
@@ -272,6 +305,12 @@ void cfa_channel(InputArray _src, OutputArray _dst, int x, int y) {
   // return the requested quadrant
   Mat roi(quad, Rect(w2*x,h2*y,w2,h2));
   roi.copyTo(dst);
+}
+
+void cfa_channel(InputArray _src, OutputArray _dst, std::string channel, std::string cfaPattern) {
+  int x, y;
+  cfa_offset(channel, cfaPattern, &x, &y);
+  cfa_channel(_src, _dst, x, y);
 }
 
 // smooth a CFA image in CFA space; that is, convert

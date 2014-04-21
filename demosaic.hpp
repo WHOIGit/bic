@@ -31,6 +31,30 @@
 cv::Mat demosaic(cv::Mat cfa, std::string cfaPattern="rggb");
 
 /**
+ * Demosaic a color-filter-array (a.k.a. "RAW") image and produce
+ * a half-sized three-channel color image (BGR).
+ *
+ * This function produces a low-quality, half-sized image suitable
+ * for previewing, using a minimum of CPU cycles.
+ *
+ * The algorithm is simply to extract all four CFA quadrants use them
+ * as color channels in a new half-size image. The algorithm uses
+ * one of the green-channel quadrants rather than averaging both
+ * of othem.
+ *
+ * @param cfa the color filter array (CFA) patterned image
+ *
+ * @param cfaPattern a string describing the Bayer pattern; one of
+ * "rggb", "bggr", "grbg", or "gbrg". Case insensitive.
+ *
+ * @param avg_green whether to average the two green channel images
+ * together
+ *
+ * @return a new color (BGR) image
+ */
+cv::Mat demosaic_thumb_lq(cv::Mat cfa, std::string cfaPattern="rggb");
+
+/**
  * Generate a mosaic of four half-resolution images containing pixels from
  * each Bayer offset, i.e. an image laid out like this with respect to
  * Bayer offsets x,y:
@@ -72,6 +96,17 @@ void cfa_quad(cv::InputArray src, cv::OutputArray dst);
 void quad_cfa(cv::InputArray quad, cv::OutputArray dst);
 
 /**
+ * Return channel offsets given a Bayer pattern and color channel name. These
+ * are the same kinds of offsets passed to cfa_channel.
+ *
+ * @param channel the channel name
+ * @param cfaPattern the bayer pattern
+ * @param off_x where to put the x offset
+ * @param off_y where to put the y offset
+ */
+void cfa_offset(std::string channel, std::string cfaPattern, int* off_x, int *off_y);
+
+/**
  * Return a half-resolution image containing pixels at the given
  * Bayer offset.
  *
@@ -83,6 +118,19 @@ void quad_cfa(cv::InputArray quad, cv::OutputArray dst);
  * @return the channel image
  */
 void cfa_channel(cv::InputArray src, cv::OutputArray dst, int x=0, int y=0);
+
+/**
+ * Return a half-resolution image containing pixels from the CFA
+ * quad associated with the given color channel
+ *
+ * @param src the CFA image
+ * @param dst the output image (must be half the resolution)
+ * @param channel the channel name
+ * @param cfaPattern the bayer pattern
+ *
+ * @return the channel image
+ */
+void cfa_channel(cv::InputArray src, cv::OutputArray dst, std::string channel, std::string cfaPattern);
 
 /**
  * Smooth a Bayer-patterned image with a Gaussian filter, applying
@@ -99,4 +147,3 @@ void cfa_channel(cv::InputArray src, cv::OutputArray dst, int x=0, int y=0);
  * @param dst the output image
  */
 void cfa_smooth(cv::InputArray src, cv::OutputArray dst, int ksize);
-
