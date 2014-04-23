@@ -231,7 +231,7 @@ cv::Mat correct_one(WorkState* state, cv::Mat cfa_LR, string inpath, double alt,
     cfa_smooth(left,left,params->lightmap_smoothing);
     cfa_smooth(right,right,params->lightmap_smoothing);
   } else {
-    cfa_smooth(cfa_LR,cfa_LR,params->lightmap_smoothing);
+    cfa_smooth(average,average,params->lightmap_smoothing);
   }
   log("SMOOTHED lightmap for %s") % inpath;
   illum::correct(cfa_LR, cfa_LR, average); // correct it
