@@ -234,16 +234,17 @@ cv::Mat correct_one(WorkState* state, cv::Mat cfa_LR, string inpath, double alt,
     cfa_smooth(average,average,params->lightmap_smoothing);
   }
   log("SMOOTHED lightmap for %s") % inpath;
-  illum::correct(cfa_LR, cfa_LR, average); // correct it
+  Mat corrected;
+  illum::correct(cfa_LR, corrected, average); // correct it
   log("DEMOSAICING %s") % inpath;
   // demosaic it
-  Mat rgb_LR = demosaic(cfa_LR,params->bayer_pattern);
+  Mat rgb_LR = demosaic(corrected,params->bayer_pattern);
   // brightness and contrast parameters
   double max = params->max_brightness;
   double min = params->min_brightness;
   // adjust brightness/contrast and save as 8-bit png
   Mat rgb_LR_8u;
-  rgb_LR = rgb_LR * (255.0 / (65535.0 * (max - min))) - (min * 255.0);
+  rgb_LR = rgb_LR * (255.0 / (max - min)) - (min * 255.0);
   rgb_LR.convertTo(rgb_LR_8u, CV_8U);
   return rgb_LR_8u;
 }
