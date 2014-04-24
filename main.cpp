@@ -80,6 +80,8 @@ int main(int argc, char **argv) {
 	prototype::test_flatness(params);
       } else if(command=="alt") {
 	utils::alt_from_stereo(params);
+      } else if(command=="thumblight") {
+	utils::thumb_lightmap(params);
       } else if(command=="view") {
 	utils::view_raw(params);
       } else if(command=="xeye") {

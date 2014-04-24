@@ -21,4 +21,8 @@ namespace utils {
    * View an image as a crosseye stereo image
    */
   void view_xeye(learn_correct::Params);
+  /**
+   * Generate thumbnails of a lightmap
+   */
+  void thumb_lightmap(learn_correct::Params);
 }

@@ -11,6 +11,7 @@
 #include "demosaic.hpp"
 #include "stereo.hpp"
 #include "logging.hpp"
+#include "illumination.hpp"
 
 namespace fs = boost::filesystem;
 
@@ -22,6 +23,8 @@ using jlog::log_error;
 
 using learn_correct::Params;
 using stereo::CameraPair;
+
+using boost::str;
 
 void alt_task(Params* params, string inpath) {
   try {
@@ -121,4 +124,28 @@ void utils::view_xeye(Params params) {
   namedWindow(params.input.c_str(), CV_WINDOW_AUTOSIZE );
   imshow(params.input.c_str(), X );
   waitKey(0);
+}
+
+void utils::thumb_lightmap(Params params) {
+  illum::MultiLightfield lightmap(params.alt_spacing);
+  if(params.lightmap_dir.empty())
+    throw std::runtime_error("no lightmap directory specified");
+  log("LOADING lightmap ...");
+  lightmap.load(params.lightmap_dir);
+  for(double alt = 0; alt < 1000; alt += params.alt_spacing) {
+    try {
+      Mat raw_avg;
+      lightmap.getAverage(raw_avg, alt);
+      // now do a quick-and-dirty conversion to color
+      Mat bgr_avg = demosaic_thumb_lq(raw_avg, params.bayer_pattern);
+      // now convert to 8u
+      bgr_avg *= 255.0 / 65535.0;
+      fs::path p(params.lightmap_dir);
+      p /= str(boost::format("thumb_slice_%.02f.jpg") % alt);
+      log("SAVING thumbnail %s") % p.string();
+      imwrite(p.string(), bgr_avg);
+    } catch(std::exception) {
+      // silently ignore
+    }
+  }
 }
