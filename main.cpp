@@ -86,6 +86,8 @@ int main(int argc, char **argv) {
 	utils::view_raw(params);
       } else if(command=="xeye") {
 	utils::view_xeye(params);
+      } else if(command=="sbs") {
+	utils::side_by_side(params);
       } else if(command=="xoff") {
 	stereo::xoff_test(argc,argv);
       } else if(command=="res") {

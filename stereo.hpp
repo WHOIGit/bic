@@ -48,6 +48,17 @@ namespace stereo {
    */
   cv::Mat xeye(cv::Mat LR, int xoff=0);
   /**
+   * Given a stereo pair and x offset, generate a side-by-side
+   * view at a specific output image size, and scale/pad (i.e.,
+   * "letterbox") the two images to fit the output image size.
+   * @param LR original side-by-side image
+   * @param width width of output image
+   * @param height height of output image
+   * @param xoff x offset in original image coordinates
+   */
+  cv::Mat sideBySide(cv::Mat LR, int width, int height, int xoff=0);
+
+  /**
    * The metrics associated with a stereo pair of cameras. Provides
    * conversions and utilities for computing where corresponding points
    * lie in image pairs.

@@ -119,6 +119,39 @@ cv::Mat stereo::xeye(cv::Mat LR, int xoff) {
   return X;
 }
 
+/**
+ * Given a stereo pair and x offset, generate a side-by-side
+ * view at a specific output image size, and scale/pad (i.e.,
+ * "letterbox") the two images to fit the output image size.
+ */
+cv::Mat stereo::sideBySide(cv::Mat LR, int w2, int h, int xoff) {
+  cv::Mat dst = cv::Mat::zeros(cv::Size(w2,h), LR.type());
+  int w = w2 / 2; // size of one half
+  cv::Mat L(LR, overlap_L(LR, xoff));
+  cv::Mat R(LR, overlap_R(LR, xoff));
+  int wo = L.size().width;
+  int ho = L.size().height;
+  // now compute the height and width scaling factors,
+  // and pick the smallest one
+  double hs = (1.0 * h) / ho;
+  double ws = (1.0 * w) / wo;
+  double s = hs < ws ? hs : ws;
+  // resize both images
+  cv::resize(L, L, cv::Size(0, 0), s, s);
+  cv::resize(R, R, cv::Size(0, 0), s, s);
+  int sw = L.size().width; // scaled width
+  int sh = L.size().height; // scaled height
+  int ctr_x_L = w / 2;
+  int ctr_x_R = ctr_x_L + w;
+  int ctr_y = h / 2;
+  // composite into proper locations in final letterboxed image
+  cv::Mat dL(dst, cv::Rect(ctr_x_L - sw/2, ctr_y - sh/2, sw, sh));
+  cv::Mat dR(dst, cv::Rect(ctr_x_R - sw/2, ctr_y - sh/2, sw, sh));
+  L.copyTo(dL);
+  R.copyTo(dR);
+  return dst;
+}
+
 // FIXME the stuff below this point is not production code
 
 cv::Mat get_green(cv::Mat cfa_LR) {

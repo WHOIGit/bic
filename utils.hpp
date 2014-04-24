@@ -25,4 +25,8 @@ namespace utils {
    * Generate thumbnails of a lightmap
    */
   void thumb_lightmap(learn_correct::Params);
+  /**
+   * Generate side-by-side letterbodxed image
+   */
+  void side_by_side(learn_correct::Params);
 }
