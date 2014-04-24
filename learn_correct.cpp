@@ -376,6 +376,8 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
   // before any OpenCV operations are done, set global error flag
   cv::setBreakOnError(true);
   WorkState state(p);
+  if(p.lightmap_dir.empty())
+    throw std::runtime_error("no lightmap directory specified for learn/correct operation");
   if(learn && !p.update.empty()) { // updating?
     state.resume(p.update);
   } else if(learn && !p.update.empty()) {
