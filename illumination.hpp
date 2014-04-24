@@ -153,7 +153,7 @@ public:
     Mat dst = _dst.getMat();
     if(dst.type() != CV_32F)
       throw std::runtime_error("output image must be 32-bit floating point");
-    getAverage().copyTo(dst); // FIXME called twice!
+    avg.copyTo(dst);
   }
   /**
    * Compute the average image and return it. The returned image will be
