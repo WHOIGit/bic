@@ -376,7 +376,8 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
   // before any OpenCV operations are done, set global error flag
   cv::setBreakOnError(true);
   WorkState state(p);
-  if(p.lightmap_dir.empty())
+  bool adaptive = learn && correct;
+  if(p.lightmap_dir.empty() && !adaptive)
     throw std::runtime_error("no lightmap directory specified for learn/correct operation");
   if(learn && !p.update.empty()) { // updating?
     state.resume(p.update);
@@ -460,10 +461,15 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
     workers.join_all();
 
     int n_learned_now = state.n_learned();
+    bool temp_lightmap = p.lightmap_dir.empty() && adaptive;
+    bool last_checkpoint = learn && n_todo > 0 && !temp_lightmap;
+    bool checkpoint = learn && n_todo < p.batch_size && n_learned_now > n_learned_then && !temp_lightmap;
     // we know output directory already exists and can be written to
-    if(learn && n_todo > 0) { // final output? (did less than the batch size?)
+    if(last_checkpoint) {
       state.checkpoint(p.lightmap_dir);
-    } else if(learn && n_todo < p.batch_size && n_learned_now > n_learned_then) {
+    } else if(checkpoint) {
+      if(p.lightmap_dir.empty() && !adaptive)
+	throw std::runtime_error("ERROR cannot checkpoint, no lightmap directory specified");
       // shuffle directories around
       fs::path outd(p.lightmap_dir);
       fs::path latest_checkpoint = outd / "latest";
