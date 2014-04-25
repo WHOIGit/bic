@@ -164,6 +164,11 @@ void side_by_side_task(Params params, Task task) {
   log("ALIGNING %s") % task.inpath;
   int xoff = stereo::align(y_LR);
   Mat sbs = stereo::sideBySide(in_LR, params.resolution_x, params.resolution_y, xoff);
+  // create directories if necessary
+  fs::path outp(outpath);
+  fs::path outdir = outp.parent_path();
+  if(params.create_directories)
+    fs::create_directories(outdir);
   log("WRITING %s") % outpath;
   imwrite(outpath, sbs);
 }
