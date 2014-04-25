@@ -184,11 +184,12 @@ namespace learn_correct {
     }
     Params() { }
     void parse_resolution(std::string res) {
-      if(res.empty())
-	return;
       // resolution parameter is bad until proven otherwise
       resolution_x = -1;
       resolution_y = -1;
+      //
+      if(res.empty())
+	return;
       // resolution is in the form "%dx%d"
       try {
 	std::vector<std::string> xy;
@@ -275,6 +276,11 @@ namespace learn_correct {
       return strm;
     }
   };
+
+  /**
+   * Construct outpath from inpath
+   */
+  std::string construct_outpath(Params p, std::string inpath);
 
   // primary work scripts
 

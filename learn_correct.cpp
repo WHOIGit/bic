@@ -354,7 +354,7 @@ std::istream* learn_correct::get_input(learn_correct::Params p) {
   }
 }
 
-std::string construct_outpath(learn_correct::Params p, string inpath) {
+std::string learn_correct::construct_outpath(learn_correct::Params p, string inpath) {
   using boost::algorithm::replace_first;
   using boost::algorithm::ends_with;
   string outpath;
@@ -416,7 +416,7 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
 	// make sure we've got a good outpath
 	string outpath; // may be needed for adaptive
 	if(correct) { // if correcting
-	  outpath = task.outpath.empty() ? construct_outpath(p, task.inpath) : task.outpath;
+	  outpath = task.outpath.empty() ? learn_correct::construct_outpath(p, task.inpath) : task.outpath;
 	  if(outpath.empty())
 	    log_error("unable to construct output path for %s") % task.inpath;
 	}

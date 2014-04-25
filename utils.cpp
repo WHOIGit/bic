@@ -22,6 +22,7 @@ using jlog::log;
 using jlog::log_error;
 
 using learn_correct::Params;
+using learn_correct::Task;
 using stereo::CameraPair;
 
 using boost::str;
@@ -150,13 +151,57 @@ void utils::thumb_lightmap(Params params) {
   }
 }
 
-void utils::side_by_side(Params params) {
-  Mat in_LR = imread(params.input);
+void side_by_side_task(Params params, Task task) {
+  string outpath = task.outpath;
+  if(outpath.empty())
+    outpath = learn_correct::construct_outpath(params, task.inpath);
+  if(outpath.empty())
+    throw std::runtime_error("no output path specified");
+  log("READING %s") % task.inpath;
+  Mat in_LR = imread(task.inpath);
   Mat y_LR;
   cvtColor(in_LR, y_LR, CV_BGR2GRAY);
+  log("ALIGNING %s") % task.inpath;
   int xoff = stereo::align(y_LR);
   Mat sbs = stereo::sideBySide(in_LR, params.resolution_x, params.resolution_y, xoff);
-  namedWindow(params.input.c_str(), CV_WINDOW_AUTOSIZE );
-  imshow(params.input.c_str(), sbs );
-  waitKey(0);
+  log("WRITING %s") % outpath;
+  imwrite(outpath, sbs);
+}
+
+void utils::side_by_side(Params params) {
+  // before any OpenCV operations are done, set global error flag
+  cv::setBreakOnError(true);
+  // post all work
+  boost::asio::io_service io_service;
+  boost::thread_group workers;
+  // start up the work threads
+  // use the work object to keep threads alive before jobs are posted
+  // use auto_ptr so we can indicate that no more jobs will be posted
+  auto_ptr<boost::asio::io_service::work> work(new boost::asio::io_service::work(io_service));
+  // create the thread pool
+  for(int i = 0; i < params.n_threads; i++) {
+    workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
+  }
+  // post jobs
+  istream *csv_in = learn_correct::get_input(params);
+  string line;
+  while(getline(*csv_in,line)) { // read pathames from a file
+    try {
+      boost::algorithm::trim_right(line);
+      Task task(line);
+      if(fs::exists(task.inpath)) {
+	io_service.post(boost::bind(side_by_side_task, params, task));
+      } else {
+	log_error("WARNING: can't find %s") % task.inpath;
+      }
+    } catch(std::runtime_error const &e) {
+      log_error("ERROR parsing input metadata: %s") % e.what();
+    } catch(std::exception) {
+      log_error("ERROR parsing input metadata");
+    }
+  }
+  // destroy the work object to indicate that there are no more jobs
+  work.reset();
+  // now run all pending jobs to completion
+  workers.join_all();
 }
