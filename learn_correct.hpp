@@ -186,13 +186,20 @@ namespace learn_correct {
     void parse_resolution(std::string res) {
       if(res.empty())
 	return;
+      // resolution parameter is bad until proven otherwise
       resolution_x = -1;
       resolution_y = -1;
       // resolution is in the form "%dx%d"
-      std::vector<std::string> xy;
-      boost::split(xy, res, boost::is_any_of("x:")); // allow colons as well
-      resolution_x = boost::lexical_cast<int>(xy[0]);
-      resolution_y = boost::lexical_cast<int>(xy[1]);
+      try {
+	std::vector<std::string> xy;
+	boost::split(xy, res, boost::is_any_of("x:")); // allow colons as well
+	if(xy.size() != 2)
+	  throw std::exception();
+	resolution_x = boost::lexical_cast<int>(xy[0]);
+	resolution_y = boost::lexical_cast<int>(xy[1]);
+      } catch(std::exception) {
+	throw std::logic_error(boost::str(boost::format("resolution parameter \"%s\" malformed") % res));
+      }
     }
     /**
      * Initialize parameters from a variable map.
