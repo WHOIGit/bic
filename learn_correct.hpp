@@ -4,6 +4,7 @@
 #include <boost/tokenizer.hpp>
 #include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>
+#include <boost/lexical_cast.hpp>
 #include <boost/thread.hpp>
 
 #define H2O_ADJUSTMENT 1.2 // hardcoded parallax scaling factor (FIXME magic number?)
@@ -21,8 +22,8 @@
 #define OPT_TEMPLATE_SIZE "patch-size" // parallax tempalte size (pixels)
 #define OPT_SMOOTHING "smooth" // lightmap smoothking kernel size (pixels)
 #define OPT_CAMERA_SEP "camera-spacing" // distance between focal points of cameras (meters)
-#define OPT_MIN_BRIGHTNESS "min-brightness" // min brightness of lightmap (0-1)
-#define OPT_MAX_BRIGHTNESS "max-brightness" // max brightness of lightmap (0-1)
+#define OPT_MIN_BRIGHTNESS "min-brightness" // min brightness of lightmap (dimensionless)
+#define OPT_MAX_BRIGHTNESS "max-brightness" // max brightness of lightmap (dimensionless)
 #define OPT_CREATE_DIRECTORIES "create-directories" // whether to create nonexistent output directories
 #define OPT_STEREO "stereo" // whether images are stereo pairs
 #define OPT_UPDATE "update" // whether to load lightmap
@@ -33,6 +34,7 @@
 #define OPT_PATH_PREFIX_OUT "out_prefix" // strip and/or replace input path prefix to construct output path
 #define OPT_UNDERTRAIN "undertrain" // undertraining threshold in numbers of images
 #define OPT_OVERTRAIN "overtrain" // overtraining threshold in numbers of images
+#define OPT_RESOLUTION "resolution" // resolution for some operations (e.g., "1920x1080")
 
 namespace po = boost::program_options;
 
@@ -117,6 +119,10 @@ namespace learn_correct {
     int undertrain;
     /** Overtraining threshold (in numbers of images) */
     int overtrain;
+    /** X resolution */
+    int resolution_x;
+    /** Y resolution */
+    int resolution_y;
     /**
      * Validate parameters. Checks for obviously invalid parameters
      * such as negative focal lengths, min_brightness > max_brightness,
@@ -173,8 +179,21 @@ namespace learn_correct {
 	throw std::logic_error("undertraining threshold must be >= 1 images");
       if(overtrain <= undertrain)
 	throw std::logic_error("overtraining threshold must be greater than undertraining threshold");
+      if(resolution_x < 0 || resolution_y < 0)
+	throw std::logic_error("syntax error in output resolution");
     }
     Params() { }
+    void parse_resolution(std::string res) {
+      if(res.empty())
+	return;
+      resolution_x = -1;
+      resolution_y = -1;
+      // resolution is in the form "%dx%d"
+      std::vector<std::string> xy;
+      boost::split(xy, res, boost::is_any_of("x:")); // allow colons as well
+      resolution_x = boost::lexical_cast<int>(xy[0]);
+      resolution_y = boost::lexical_cast<int>(xy[1]);
+    }
     /**
      * Initialize parameters from a variable map.
      *
@@ -209,6 +228,7 @@ namespace learn_correct {
       path_prefix_out = options[OPT_PATH_PREFIX_OUT].as<string>();
       undertrain = options[OPT_UNDERTRAIN].as<int>();
       overtrain = options[OPT_OVERTRAIN].as<int>();
+      parse_resolution(options[OPT_RESOLUTION].as<string>());
       if(_validate)
 	validate();
     }
@@ -244,6 +264,7 @@ namespace learn_correct {
       strm << OPT_PATH_PREFIX_OUT << " = " << p.path_prefix_out << endl;
       strm << OPT_UNDERTRAIN << " = " << p.undertrain << endl;
       strm << OPT_OVERTRAIN << " = " << p.overtrain << endl;
+      strm << OPT_RESOLUTION << p.resolution_x << "x" << p.resolution_y << endl;
       return strm;
     }
   };

@@ -155,7 +155,7 @@ void utils::side_by_side(Params params) {
   Mat y_LR;
   cvtColor(in_LR, y_LR, CV_BGR2GRAY);
   int xoff = stereo::align(y_LR);
-  Mat sbs = stereo::sideBySide(in_LR, 1920, 1080, xoff);
+  Mat sbs = stereo::sideBySide(in_LR, params.resolution_x, params.resolution_y, xoff);
   namedWindow(params.input.c_str(), CV_WINDOW_AUTOSIZE );
   imshow(params.input.c_str(), sbs );
   waitKey(0);

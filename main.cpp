@@ -39,6 +39,7 @@ int main(int argc, char **argv) {
     OPT(OPT_PATH_PREFIX_OUT,"O",string,"","prefix to prepend when constructing output pathnames from input pathnames")
     OPT(OPT_PIXEL_SEP,"p",double,0.00000645,"grid spacing of pixels on sensor (meters)")
     OPT(OPT_TEMPLATE_SIZE,"P",int,64,"size of parallax matching template (pixels)")
+    OPT(OPT_RESOLUTION,"r",string,"","output resolution for certain operations (e.g., \"1920x1080\")")
     OPT(OPT_SMOOTHING,"s",int,31,"size of lightmap smoothing kernel (pixels)")
     OPT(OPT_STEREO,"S",bool,true,"treat images as side-by-side stereo pairs")
     OPT(OPT_N_THREADS,"t",int,0,"number of threads")
