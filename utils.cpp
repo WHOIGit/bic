@@ -152,25 +152,33 @@ void utils::thumb_lightmap(Params params) {
 }
 
 void side_by_side_task(Params params, Task task) {
-  string outpath = task.outpath;
-  if(outpath.empty())
-    outpath = learn_correct::construct_outpath(params, task.inpath);
-  if(outpath.empty())
-    throw std::runtime_error("no output path specified");
-  log("READING %s") % task.inpath;
-  Mat in_LR = imread(task.inpath);
-  Mat y_LR;
-  cvtColor(in_LR, y_LR, CV_BGR2GRAY);
-  log("ALIGNING %s") % task.inpath;
-  int xoff = stereo::align(y_LR);
-  Mat sbs = stereo::sideBySide(in_LR, params.resolution_x, params.resolution_y, xoff);
-  // create directories if necessary
-  fs::path outp(outpath);
-  fs::path outdir = outp.parent_path();
-  if(params.create_directories)
-    fs::create_directories(outdir);
-  log("WRITING %s") % outpath;
-  imwrite(outpath, sbs);
+  try {
+    string outpath = task.outpath;
+    if(outpath.empty())
+      outpath = learn_correct::construct_outpath(params, task.inpath);
+    if(outpath.empty())
+      throw std::runtime_error("no output path specified");
+    log("READING %s") % task.inpath;
+    Mat in_LR = imread(task.inpath);
+    Mat y_LR;
+    cvtColor(in_LR, y_LR, CV_BGR2GRAY);
+    log("ALIGNING %s") % task.inpath;
+    int xoff = stereo::align(y_LR);
+    Mat sbs = stereo::sideBySide(in_LR, params.resolution_x, params.resolution_y, xoff);
+    // create directories if necessary
+    fs::path outp(outpath);
+    fs::path outdir = outp.parent_path();
+    if(params.create_directories)
+      fs::create_directories(outdir);
+    else if(!fs::exists(outdir))
+      throw std::runtime_error(boost::str(boost::format("output directory %s does not exist") % outdir));
+    log("WRITING %s") % outpath;
+    imwrite(outpath, sbs);
+  } catch(std::runtime_error const &e) {
+    log_error("ERROR side-by-side %s: %s") % task.inpath % e.what();
+  } catch(std::exception) {
+    log_error("ERROR: side-by-side failed on %s") % task.inpath;
+  }
 }
 
 void utils::side_by_side(Params params) {
