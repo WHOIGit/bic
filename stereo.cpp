@@ -137,8 +137,9 @@ cv::Mat stereo::sideBySide(cv::Mat LR, int w2, int h, int xoff) {
   double ws = (1.0 * w) / wo;
   double s = hs < ws ? hs : ws;
   // resize both images
-  cv::resize(L, L, cv::Size(0, 0), s, s);
-  cv::resize(R, R, cv::Size(0, 0), s, s);
+  int interp_method = s > 1 ? CV_INTER_CUBIC : CV_INTER_AREA;
+  cv::resize(L, L, cv::Size(0, 0), s, s, interp_method);
+  cv::resize(R, R, cv::Size(0, 0), s, s, interp_method);
   int sw = L.size().width; // scaled width
   int sh = L.size().height; // scaled height
   int ctr_x_L = w / 2;
