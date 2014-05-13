@@ -31,6 +31,14 @@ int stereo::align(cv::Mat y_LR_in, int template_size, double* vary) {
   int w34 = w2 + w4; // 3/4 the width (center of right image)
   int ts = template_size; // template size
   int ts2 = ts / 2;
+  // compute bounding box for samples' upper-left corners
+  int six = ts*2; // sample min x
+  int sax = w2-ts*4; // sample max x
+  int say = h-ts*2+1; // sample max y
+  if(sax < six) // makes no sense; template is too small for image width
+    return 0;
+  if(say < 0) // makes no sense; template is too small for image height
+    return 0;
   // generate a seed from image data so as:
   // - to make results reproducible per-image
   // - to reduce aliasing in cases where frames share non-moving objects
@@ -47,8 +55,8 @@ int stereo::align(cv::Mat y_LR_in, int template_size, double* vary) {
   accumulator_set<int, stats<tag::variance > > sample_var;
   while(n < SAMPLE_SIZE && g < GIVE_UP) {
     g++; // every attempt counts towards giving up
-    int x = rng.uniform(ts*2,w2-ts*4);
-    int y = rng.uniform(0,h-ts*2+1);
+    int x = rng.uniform(six,sax);
+    int y = rng.uniform(0,say);
     Mat templ(y_LR,Rect(x,y,ts,ts));
     Mat right(y_LR,Rect(w2,0,w2,h-ts));
     Mat out;
