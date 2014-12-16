@@ -12,4 +12,5 @@ namespace prototype {
   void get_slice(learn_correct::Params);
   void avg_by_alt(learn_correct::Params);
   void redcyan(learn_correct::Params);
+  void test_color_learn(learn_correct::Params);
 }

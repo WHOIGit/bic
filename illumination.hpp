@@ -16,6 +16,10 @@
 
 namespace fs = boost::filesystem;
 
+#define R_PREFIX "R_"
+#define G_PREFIX "G_"
+#define B_PREFIX "B_"
+
 /**
  * Use Lightfield to accumulate a frame average from multiple images
  * that are the same size, and then "correct" images by dividing them
@@ -49,8 +53,8 @@ namespace fs = boost::filesystem;
 namespace illum {
   class Lightfield;
   class MultiLightfield;
-  class VehicleLightfield;
-  void correct(cv::InputArray src, cv::OutputArray dst, cv::Mat lightfield);
+  class RgbLightfield;
+  void correct(cv::InputArray src, cv::OutputArray dst, cv::Mat average);
 };
 
 /**
@@ -281,9 +285,6 @@ public:
   }
 };
 
-/*
-
-
 /**
  * A multi-altitude lightfield consisting of a set of lightfields each
  * of which is associated with a specific altitude class. Altitude classes
@@ -435,8 +436,9 @@ public:
    * use a directory that already has other files in it.
    *
    * @param outdir the output directory
+   * @param prefix optional prefix for slice files
    */
-  void save(string outdir) {
+  void save(string outdir, string prefix = "") {
     typename std::vector<Slice<int>* >::iterator it = slices.begin();
     for(; it != slices.end(); ++it) {
       Slice<int>* slice = *it;
@@ -444,7 +446,7 @@ public:
       if(!lf->empty()) {
 	int count = slice->getAlt();
 	std::stringstream outpaths;
-	outpaths << "slice_" << count << ".tiff";
+	outpaths << prefix << "slice_" << count << ".tiff";
 	fs::path p(outdir);
 	p /= outpaths.str();
 	lf->save(p.string());
@@ -458,13 +460,14 @@ public:
    * a directory that wasn't populated using the save method.
    *
    * @param outdir the output directory where the lightfield is stored
+   * @param prefix optional prefix on filenames
    * @return number of slices loaded
    */
-  int load(string outdir) {
+  int load(string outdir, string prefix = "") {
     int loaded = 0;
     for(int count = 0; count < 1000; ++count) {
       std::stringstream inpaths;
-      inpaths << "slice_" << count << ".tiff";
+      inpaths << prefix << "slice_" << count << ".tiff";
       fs::path p(outdir);
       p /= inpaths.str();
       if(fs::exists(p)) {
@@ -477,63 +480,39 @@ public:
   }
 };
 
-class illum::VehicleLightfield : public illum::MultiLightfield {
-private:
-  stereo::CameraPair cameras;
+class illum::RgbLightfield {
+  typedef cv::Mat Mat;
+  typedef std::string string; 
+protected:
+  illum::MultiLightfield* R;
+  illum::MultiLightfield* G;
+  illum::MultiLightfield* B;
 public:
   /**
    * Create a multi-altitude lightfield.
-   * @param step_m the width of each altitude bin in m
-   * @param cameras camera metrics
+   * @param step_m the width of each altitude bin in m (default: 10cm)
+   * @param undertrain undertraining threshold (in number of images)
+   * @param overtrain overtraining threshold (in number of images)
    */
-  VehicleLightfield(double step_m, stereo::CameraPair cameras) {
-    alt_step = step_m;
-    this->cameras = cameras;
+  RgbLightfield(double step_m=0.1, int undertrain=20, int overtrain=65535) {
+    R = new MultiLightfield(step_m, undertrain, overtrain);
+    G = new MultiLightfield(step_m, undertrain, overtrain);
+    B = new MultiLightfield(step_m, undertrain, overtrain);
   }
   /**
    * Add an image to the lightfield
    * @param image the image to add
    * @param alt the altitude the image was taken at
-   * @param pitch the pitch of the vehicle
-   * @param roll the roll of the vehicle
+   * @return number of lightfield slices affected (0-2)
    */
-  int addImage(Mat image, double alt, double pitch, double roll) {
-    // compute distance map
-    int width = image.size().width;
-    int height = image.size().height;
-    Mat D = Mat::zeros(height, width, CV_32F);
-    double width_m = width * cameras.pixel_sep;
-    double height_m = height * cameras.pixel_sep;
-    if(false) { // FIXME unfinished
-      Mat left = Mat(D,cv::Rect(0,0,width/2,height));
-      Mat right = Mat(D,cv::Rect(width/2,0,width/2,height));
-      // now compute center of overlap region in sensor coordinates
-      double xoff_m = cameras.alt2xoff(alt) * cameras.pixel_sep;
-      // compute distance map for each camera frame centered on the center of the overlap region
-      double cx_L = 0; // FIXME do something here
-      double cx_R = 0; // FIXME do something here
-      interp::distance_map(left, alt, pitch, roll, width_m/2, height_m, cameras.focal_length, cx_L);
-      interp::distance_map(right, alt, pitch, roll, width_m/2, height_m, cameras.focal_length, cx_R);
-    } else {
-      // for now, compute a distance map that in the case of stereo pairs spans the whole image
-      interp::distance_map(D, alt, pitch, roll, width_m, height_m, cameras.focal_length);
-    }
-    // now discretize into slices
-    int i = 0;
-    Mat W = Mat::zeros(D.size(), CV_32F);
-    while(cv::countNonZero(W) == 0) {
-      interp::dist_weight(D, W, alt_step, i++);
-    }
-    while(cv::countNonZero(W) > 0) {
-      Slice<int>* slice = getSlice(i);
-      boost::mutex* mutex = slice->get_mutex();
-      { // protect slice with mutex to prevent concurrent writes
-	boost::lock_guard<boost::mutex> lock(*mutex);
-	slice->getLightfield()->addImage(image, W);
-      }
-      interp::dist_weight(D, W, alt_step, i++);
-    }
-    return 0;
+  int addImage(Mat image, double alt) {
+    cv::Mat bgr_image;
+    // extract color channels
+    std::vector<cv::Mat> channels;
+    cv::split(bgr_image, channels);
+    B->addImage(channels[0], alt);
+    G->addImage(channels[1], alt);
+    R->addImage(channels[2], alt);
   }
   /**
    * Get the average image at the given altitude.
@@ -541,34 +520,48 @@ public:
    * the average image is interpolated between any overlapping bins.
    * @param _dst the output image (zeros at desired resolution)
    * @param alt the altitude the image was taken at
-   * @param pitch the pitch of the vehicle
-   * @param roll the roll of the vehicle
    */
-  void getAverage(cv::OutputArray _dst, double alt, double pitch, double roll) {
-    Mat dst = _dst.getMat();
-    int width = dst.size().width;
-    int height = dst.size().height;
-    Mat D = Mat::zeros(height, width, CV_32F);
-    double width_m = width * cameras.pixel_sep;
-    double height_m = height * cameras.pixel_sep;
-    interp::distance_map(D, alt, pitch, roll, width_m, height_m, cameras.focal_length);
-    // now discretize into slices
-    int i = 0;
-    Mat W = Mat::zeros(D.size(), CV_32F);
-    while(cv::countNonZero(W) == 0) {
-      interp::dist_weight(D, W, alt_step, i++);
-    }
-    while(cv::countNonZero(W) > 0) {
-      Slice<int>* slice = getSlice(i);
-      Mat sAverage;
-      // get the slice average
-      boost::mutex* mutex = slice->get_mutex();
-      { // protect slice with mutex to prevent interleaved read/write operations
-	boost::lock_guard<boost::mutex> lock(*mutex);
-	sAverage = slice->getLightfield()->getAverage();
-      }
-      dst += sAverage.mul(W); // multiply by slice weight
-      interp::dist_weight(D, W, alt_step, i++);
-    }
+  void getAverage(cv::OutputArray _dst, double alt) {
+    cv::Mat Ra, Ga, Ba;
+    R->getAverage(Ra, alt);
+    B->getAverage(Ga, alt);
+    G->getAverage(Ba, alt);
+
+    // create BGR color image from each channel average
+    std::vector<cv::Mat> bgr;
+    bgr.push_back(Ba);
+    bgr.push_back(Ga);
+    bgr.push_back(Ra);
+    cv::Mat dst = _dst.getMat();
+    if(dst.type() != CV_32F)
+      throw std::runtime_error("output image must be 32-bit floating point");
+    cv::merge(bgr, dst);
+  }
+  /**
+   * Save the multi-lightfield to a directory. The lightfield is
+   * saved as a set of TIFF images. If the directory contains files
+   * with similar names, this will overwrite those files, so don't
+   * use a directory that already has other files in it.
+   *
+   * @param outdir the output directory
+   */
+  void save(string outdir) {
+    R->save(outdir, R_PREFIX);
+    G->save(outdir, G_PREFIX);
+    B->save(outdir, B_PREFIX);
+  }
+  /**
+   * Load the multi-lightfield from a directory. The lightfield is
+   * saved as a set of TIFF images. If the directory contains files
+   * with similar names, this will attempt to read them, so don't use
+   * a directory that wasn't populated using the save method.
+   *
+   * @param outdir the output directory where the lightfield is stored
+   * @return number of slices loaded
+   */
+  int load(string outdir) {
+    R->load(outdir, R_PREFIX);
+    G->load(outdir, G_PREFIX);
+    B->load(outdir, B_PREFIX);
   }
 };

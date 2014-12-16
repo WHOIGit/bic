@@ -10,10 +10,10 @@
  *
  * @param _src the source image
  * @param _dst the destination image (must be same size as src and CV_32F type)
- * @param lightfield the appropriate average image returned by the lightfield
+ * @param average the appropriate average image returned by the lightfield
  * @return a new, correctly-illuminated image (in the output array's type)
  */
-void illum::correct(cv::InputArray _src, cv::OutputArray _dst, cv::Mat lightfield) {
+void illum::correct(cv::InputArray _src, cv::OutputArray _dst, cv::Mat average) {
   using namespace cv;
   Mat src = _src.getMat();
   _dst.create(src.size(), CV_32F);
@@ -22,18 +22,18 @@ void illum::correct(cv::InputArray _src, cv::OutputArray _dst, cv::Mat lightfiel
     throw std::runtime_error("input/output image size mismatch");
   if(dst.type() != CV_32F)
     throw std::runtime_error("output image must be floating-point type");
-  if(src.size() != lightfield.size())
+  if(src.size() != average.size())
     throw std::runtime_error("input image not same size as lightfield");
   Mat src32f;
   src.convertTo(src32f, CV_32F); // convert to floating point
   // divide image by lightfield
-  Mat lightfield32f;
-  if(lightfield.type() != CV_32F) {
-    lightfield.convertTo(lightfield32f, CV_32F);
+  Mat average32f;
+  if(average.type() != CV_32F) {
+    average.convertTo(average32f, CV_32F);
   } else {
-    lightfield32f = lightfield;
+    average32f = average;
   }
   // now compute corrected image in its floating-point representation
-  Mat correct32f = src32f / lightfield32f;
+  Mat correct32f = src32f / average32f;
   correct32f.copyTo(dst);
 }
