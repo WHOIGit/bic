@@ -107,8 +107,10 @@ int main(int argc, char **argv) {
 	prototype::avg_by_alt(params);
       } else if(command=="redcyan") {
 	prototype::redcyan(params);
-      } else if(command=="rgblearn") {
-	prototype::test_color_learn(params);
+      } else if(command=="rgb_learn") {
+	prototype::test_rgb_learn(params);
+      } else if(command=="rgb_correct") {
+	prototype::test_rgb_correct(params);
       } else {
 	cerr << "ERROR unknown command " << command << endl << copts << endl;
       }

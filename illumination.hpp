@@ -13,6 +13,9 @@
 
 #include "interpolation.hpp"
 #include "stereo.hpp"
+#include "logging.hpp" // FIXME debug
+
+using jlog::log; // FIXME debug
 
 namespace fs = boost::filesystem;
 
@@ -155,8 +158,8 @@ public:
     Mat avg = getAverage();
     _dst.create(avg.size(), avg.type());
     Mat dst = _dst.getMat();
-    if(dst.type() != CV_32F)
-      throw std::runtime_error("output image must be 32-bit floating point");
+    if(dst.type() != CV_32F) 
+      throw std::runtime_error("Lightfield::getAverage: output image must be 32-bit floating point");
     avg.copyTo(dst);
   }
   /**
@@ -233,9 +236,9 @@ public:
     // load the 16-bit unsigned checkpoint image
     Mat composite_16u = cv::imread(pathname, CV_LOAD_IMAGE_ANYDEPTH);
     if(!composite_16u.data)
-      throw std::runtime_error("unable to read lightmap image file");
+      throw std::runtime_error("load: unable to read lightmap image file");
     if(composite_16u.type() != CV_16U)
-      throw std::runtime_error("lightfield image file must be 16-bit unsigned");
+      throw std::runtime_error("load: lightfield image file must be 16-bit unsigned");
     int h = composite_16u.size().height / 2;
     int w = composite_16u.size().width;
     // convert to floating point
@@ -424,7 +427,7 @@ public:
     _dst.create(Ai.size(), Ai.type());
     Mat dst = _dst.getMat();
     if(dst.type() != CV_32F)
-      throw std::runtime_error("output image must be 32-bit floating point");
+      throw std::runtime_error("MultiLightfield::getAverage output image must be 32-bit floating point");
     // now set it to the average
     dst = (Ai * Wi) + (Aj * Wj);
     return;
@@ -506,10 +509,12 @@ public:
    * @return number of lightfield slices affected (0-2)
    */
   int addImage(Mat image, double alt) {
-    cv::Mat bgr_image;
+    // convert image to float if image is 8 bit
+    Mat image32f;
+    image.convertTo(image32f, CV_32F); // convert to floating point
     // extract color channels
     std::vector<cv::Mat> channels;
-    cv::split(bgr_image, channels);
+    cv::split(image, channels);
     B->addImage(channels[0], alt);
     G->addImage(channels[1], alt);
     R->addImage(channels[2], alt);
@@ -532,9 +537,8 @@ public:
     bgr.push_back(Ba);
     bgr.push_back(Ga);
     bgr.push_back(Ra);
-    cv::Mat dst = _dst.getMat();
-    if(dst.type() != CV_32F)
-      throw std::runtime_error("output image must be 32-bit floating point");
+    cv::Mat dst;
+    _dst.create(Ra.size(), CV_32FC3); // 32-bit, 3-channel
     cv::merge(bgr, dst);
   }
   /**
