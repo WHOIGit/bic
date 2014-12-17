@@ -35,6 +35,9 @@ typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
 #define N_THREADS 12
 #define PATH_FILE "aprs.csv"
 
+// hardcoded altitude for RGB proof-of-concept
+#define RGB_ALT 1.5
+
 void prototype::test_effective_resolution(learn_correct::Params params) {
   using cv::Mat;
   using std::cerr;
@@ -214,12 +217,12 @@ void rgb_learn_task(learn_correct::Params* params, illum::RgbLightfield* RGB, st
     // assume 8-bit color tiff 
     log("READING %s") % inpath;
     bgr_frame = imread(inpath); // read it
-    // convert to 16-bit
+    log("METRICS %s %d channels, size %s x %s") % inpath % bgr_frame.channels() % bgr_frame.cols % bgr_frame.rows;
     if(bgr_frame.empty()) {
       log("SKIPPING no image data found for %s") % inpath;
       return;
     }
-    RGB->addImage(bgr_frame, 1.0); // FIXME hardcoded altitude
+    RGB->addImage(bgr_frame, RGB_ALT); // FIXME hardcoded altitude
     log("ADDED %s") % inpath;
   } catch(std::runtime_error const &e) {
     log_error("ERROR adding %s: %s") % inpath % e.what();
@@ -227,7 +230,6 @@ void rgb_learn_task(learn_correct::Params* params, illum::RgbLightfield* RGB, st
     log_error("ERROR adding %s") % inpath;
   }
 }
-
 
 void prototype::test_rgb_learn(learn_correct::Params params) {
   using std::cerr;
@@ -287,16 +289,23 @@ void prototype::test_rgb_learn(learn_correct::Params params) {
 
 void rgb_correct_task(learn_correct::Params* params, illum::RgbLightfield* RGB, string inpath, string outpath) {
   using boost::format;
-  log("CORRECT %s -> %s") % inpath % outpath;
+  log("CORRECT %s") % inpath;
   try {
     cv::Mat bgr_frame;
     // assume 8-bit color tiff 
     bgr_frame = imread(inpath); // read it
     if(bgr_frame.empty())
       return;
-    bgr_frame.convertTo(bgr_frame, CV_32F);
-    cv::Mat avg;
-    RGB->getAverage(avg, 1.0); // FIXME hardcoded altitude
+    bgr_frame.convertTo(bgr_frame, CV_32FC3);
+    // FIXME debug
+    double mn,mx; // FIXME
+    cv::minMaxLoc(bgr_frame,&mn,&mx,NULL,NULL); // FIXME
+    log("METRICS %s minMax input = %.2f - %.2f") % inpath % mn % mx; // FIXME
+    // end debug
+    cv::Mat avg(bgr_frame.rows, bgr_frame.cols, CV_32FC3);
+    RGB->getAverage(avg, RGB_ALT); // FIXME hardcoded altitude
+    cv::minMaxLoc(avg,&mn,&mx,NULL,NULL); // FIXME
+    log("METRICS %s minMax avg = %.2f - %.2f") % inpath % mn % mx; // FIXME
     // now split into channels and correct channel-wise
     std::vector<cv::Mat> avg_chans;
     cv::split(avg, avg_chans);
@@ -319,23 +328,23 @@ void rgb_correct_task(learn_correct::Params* params, illum::RgbLightfield* RGB, 
     fs::path outdir = outp.parent_path();
     if(params->create_directories)
       fs::create_directories(outdir);
-    log("NO SMOOTHING for %s") % inpath;
+    //log("NO SMOOTHING for %s") % inpath;
     // brightness and contrast parameters
     double max = params->max_brightness;
     double min = params->min_brightness;
     // adjust brightness/contrast and save as 8-bit png
-    Mat rgb_8u;
+    Mat rgb_8uc3;
     corrected = corrected * (255.0 / (max - min)) - (min * 255.0);
     log("ADJUSTED contrast/brightness for %s") % inpath;
-    corrected.convertTo(rgb_8u, CV_8UC3);
+    corrected.convertTo(rgb_8uc3, CV_8UC3);
     // now write the output image
-    log("SAVING corrected image %s to %s") % inpath % outpath;
-    if(!imwrite(outpath, rgb_8u))
+    log("SAVING corrected image to %s") % outpath;
+    if(!imwrite(outpath, rgb_8uc3))
       throw std::runtime_error(str(format("ERROR: unable to write output image to %s") % outpath));
   } catch(std::runtime_error const &e) {
     log_error("ERROR correcting %s: %s") % inpath % e.what();
-  } catch(std::exception) {
-    log_error("ERROR correcting %s") % inpath;
+  } catch(std::exception const &e) {
+    log_error("ERROR correcting %s: %s") % inpath % e.what();
   }
 }
 

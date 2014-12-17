@@ -511,13 +511,18 @@ public:
   int addImage(Mat image, double alt) {
     // convert image to float if image is 8 bit
     Mat image32f;
-    image.convertTo(image32f, CV_32F); // convert to floating point
+    image.convertTo(image32f, CV_32FC3); // convert to floating point
     // extract color channels
     std::vector<cv::Mat> channels;
-    cv::split(image, channels);
+    cv::split(image32f, channels);
     B->addImage(channels[0], alt);
     G->addImage(channels[1], alt);
     R->addImage(channels[2], alt);
+  }
+  void logMetrics(Mat img, string name) {//FIXME debug
+    double mn,mx;
+    cv::minMaxLoc(img,&mn,&mx,NULL,NULL);
+    log("METRICS: %s: %.2f - %.2f") % name % mn % mx;
   }
   /**
    * Get the average image at the given altitude.
@@ -539,7 +544,9 @@ public:
     bgr.push_back(Ra);
     cv::Mat dst;
     _dst.create(Ra.size(), CV_32FC3); // 32-bit, 3-channel
+    dst = _dst.getMat();
     cv::merge(bgr, dst);
+    logMetrics(dst,"color average"); // FIXME
   }
   /**
    * Save the multi-lightfield to a directory. The lightfield is
