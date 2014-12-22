@@ -74,7 +74,7 @@ namespace learn_correct {
    */
   class Params {
   public:
-    /** Bayer pattern of raw images (e.g., rggb). Case-insensitive */
+    /** Bayer pattern of raw images (e.g., rggb), or 'rgb' for color. Case-insensitive */
     std::string bayer_pattern;
     /** Number of threads to use when processing (default: number of CPUs on host) */
     int n_threads;
@@ -123,6 +123,8 @@ namespace learn_correct {
     int resolution_x;
     /** Y resolution */
     int resolution_y;
+    /** color */
+    bool color;
     /**
      * Validate parameters. Checks for obviously invalid parameters
      * such as negative focal lengths, min_brightness > max_brightness,
@@ -134,9 +136,14 @@ namespace learn_correct {
      */
     void validate() {
       using namespace std;
-      if(bayer_pattern != "rggb" && bayer_pattern != "bggr" &&
-	 bayer_pattern != "grbg" && bayer_pattern != "gbrg")
+      if(bayer_pattern == "rgb" || bayer_pattern == "bgr") {
+	color = true;
+      } else if(bayer_pattern == "rggb" || bayer_pattern == "bggr" ||
+		bayer_pattern == "grbg" || bayer_pattern == "gbrg") {
+	color = false;
+      } else {
 	throw std::logic_error("unrecognized bayer pattern");
+      }
       if(n_threads > boost::thread::hardware_concurrency())
 	cerr << "warning: number of threads greater than known number of hardware threads" << endl;
       if(alt_spacing <= 0)

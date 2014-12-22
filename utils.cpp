@@ -128,7 +128,7 @@ void utils::view_xeye(Params params) {
 }
 
 void utils::thumb_lightmap(Params params) {
-  illum::MultiLightfield lightmap(params.alt_spacing);
+  illum::GrayLightfield lightmap(params.alt_spacing);
   if(params.lightmap_dir.empty())
     throw std::runtime_error("no lightmap directory specified");
   log("LOADING lightmap ...");

@@ -32,7 +32,7 @@ using jlog::log_error;
 
 typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
 
-#define N_THREADS 12
+#define N_THREADS 4
 #define PATH_FILE "aprs.csv"
 
 // hardcoded altitude for RGB proof-of-concept
@@ -209,7 +209,7 @@ void prototype::test_flatness(learn_correct::Params params) {
   imwrite("avg_correct.jpg",BGR);
 }
 
-void rgb_learn_task(learn_correct::Params* params, illum::RgbLightfield* RGB, string inpath) {
+void rgb_learn_task(learn_correct::Params* params, illum::ColorLightfield* RGB, string inpath) {
   using boost::algorithm::ends_with;
   log("LEARN %s") % inpath;
   try {
@@ -238,7 +238,7 @@ void prototype::test_rgb_learn(learn_correct::Params params) {
   // before any OpenCV operations are done, set global error flag
   cv::setBreakOnError(true);
   // learn phase
-  illum::RgbLightfield RGB;
+  illum::ColorLightfield RGB;
   // post all work
   boost::asio::io_service io_service;
   boost::thread_group workers;
@@ -287,7 +287,7 @@ void prototype::test_rgb_learn(learn_correct::Params params) {
   log("DONE");
 }
 
-void rgb_correct_task(learn_correct::Params* params, illum::RgbLightfield* RGB, string inpath, string outpath) {
+void rgb_correct_task(learn_correct::Params* params, illum::ColorLightfield* RGB, string inpath, string outpath) {
   using boost::format;
   log("CORRECT %s") % inpath;
   try {
@@ -350,7 +350,7 @@ void rgb_correct_task(learn_correct::Params* params, illum::RgbLightfield* RGB, 
 
 void prototype::test_rgb_correct(learn_correct::Params params) {
   log("LOADING lightmap from %s") % params.lightmap_dir;
-  illum::RgbLightfield RGB;
+  illum::ColorLightfield RGB;
   RGB.load(params.lightmap_dir);
   // post all work
   boost::asio::io_service io_service;
@@ -451,7 +451,7 @@ void prototype::afp(learn_correct::Params p) {
 void prototype::test_interpolation(learn_correct::Params p) {
   using boost::format;
   using boost::str;
-  illum::MultiLightfield model(p.alt_spacing); // the lightfield
+  illum::GrayLightfield model(p.alt_spacing); // the lightfield
   //stereo::CameraPair cameras; // the camera metrics
   //cameras = CameraPair(p.camera_sep, p.focal_length, p.pixel_sep);
   // now read lightmap

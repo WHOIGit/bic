@@ -25,6 +25,8 @@ using std::string;
 namespace fs = boost::filesystem;
 
 using illum::MultiLightfield;
+using illum::GrayLightfield;
+using illum::ColorLightfield;
 using learn_correct::Params;
 using stereo::CameraPair;
 using jlog::log;
@@ -51,7 +53,7 @@ private:
   }
   void write_lightmap(fs::path outdir) {
     log("SAVING lightmap in %s ...") % outdir;
-    model.save(outdir.string());
+    model->save(outdir.string());
     log("SAVED lightmap in %s") % outdir;
   }
   void write_skipfile(fs::path skipfile) {
@@ -80,12 +82,16 @@ private:
   }
 public:
   Params params;
-  illum::MultiLightfield model; // the lightfield
+  illum::MultiLightfield *model; // the lightfield
   stereo::CameraPair cameras; // the camera metrics
   WorkState(Params p) {
     params = p;
     cameras = CameraPair(p.camera_sep, p.focal_length, p.pixel_sep);
-    model = MultiLightfield(p.alt_spacing, p.undertrain, p.overtrain);
+    if(p.color) {
+      model = new ColorLightfield(p.alt_spacing, p.undertrain, p.overtrain);
+    } else {
+      model = new GrayLightfield(p.alt_spacing, p.undertrain, p.overtrain);
+    }
     // model = illum::VehicleLightfield(p.alt_spacing, cameras)
   }
   // checkpoint the current state of a learn process
@@ -113,7 +119,7 @@ public:
     fs::path outdir(_outdir.empty() ? params.lightmap_dir : _outdir);
     // now read lightmap
     log("LOADING lightmap from %s ...") % outdir;
-    int loaded = model.load(outdir.string());
+    int loaded = model->load(outdir.string());
     log("LOADED %d lightmap slices from %s") % loaded % outdir;
     return loaded;
   }
@@ -176,18 +182,18 @@ double compute_missing_alt(WorkState* state, double alt, cv::Mat cfa_LR, std::st
 }
 
 // read an image from a file and make sure it's 16-bit RAW
-cv::Mat read_16u(string inpath) {
+cv::Mat read_image(string inpath, WorkState *state) {
   cv::Mat img = cv::imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
   if(!img.data)
     throw std::runtime_error(str(format("ERROR: unable to read image file: %s") % inpath));
-  if(img.type() != CV_16U)
+  if(!state->params.color && img.type() != CV_16U)
     throw std::runtime_error(str(format("ERROR: image is not 16-bit grayscale: %s") % inpath));
   return img;
 }
 
 // learn one image
 void learn_one(WorkState* state, cv::Mat cfa_LR, string inpath, double alt=0, double pitch=0, double roll=0) {
-  if(!state->model.addImage(cfa_LR, alt)) {
+  if(!state->model->addImage(cfa_LR, alt)) {
     log("SKIPPING learn for %s - lightmap slice(s) overtrained");
   } else {
     state->add_learned(inpath, alt, pitch, roll);
@@ -201,12 +207,14 @@ void learn_task(WorkState* state, string inpath, double alt, double pitch, doubl
   try  {
     log("START LEARN %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll;
     // read the image (this can be done in parallel)
-    Mat cfa_LR = read_16u(inpath);
+    Mat image = read_image(inpath, state);
+    // FIXME in grayscale case, confirm 16 bit
     log("READ %s") % inpath;
     // determine altitude if necessary
-    alt = compute_missing_alt(state, alt, cfa_LR, inpath);
+    if(state->params.stereo)
+      alt = compute_missing_alt(state, alt, image, inpath);
     // now learn the image
-    learn_one(state, cfa_LR, inpath, alt, pitch, roll);
+    learn_one(state, image, inpath, alt, pitch, roll);
     log("LEARNED %s") % inpath;
   } catch(std::runtime_error const &e) {
     log_error("DID NOT LEARN %s: %s") % inpath % e.what();
@@ -221,7 +229,7 @@ cv::Mat correct_one(WorkState* state, cv::Mat cfa_LR, string inpath, double alt,
   Params* params = &state->params;
   // get the average
   Mat average;
-  state->model.getAverage(average, alt);
+  state->model->getAverage(average, alt);
   // now smooth the average
   int h = average.size().height;
   int w = average.size().width;
@@ -284,7 +292,7 @@ void correct_task(WorkState* state, string inpath, double alt, double pitch, dou
     // construct the outpath, but throw exception if it exists and skip_existing is true
     outpath = check_outpath(params, inpath, outpath);
     // read RAW image
-    Mat cfa_LR = read_16u(inpath);
+    Mat cfa_LR = read_image(inpath, state);
     // if altitude is out of range, compute from parallax
     alt = compute_missing_alt(state, alt, cfa_LR, inpath);
     // now correct the image
@@ -306,7 +314,7 @@ void adaptive_task(WorkState* state, string inpath, double alt, double pitch, do
   Mat cfa_LR;
   try {
     // read RAW image
-    cfa_LR = read_16u(inpath);
+    cfa_LR = read_image(inpath, state);
     log("READ %s") % inpath;
   } catch(std::exception) {
     log_error("ERROR failed to read %s") % inpath;

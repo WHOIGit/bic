@@ -56,7 +56,8 @@ namespace fs = boost::filesystem;
 namespace illum {
   class Lightfield;
   class MultiLightfield;
-  class RgbLightfield;
+  class GrayLightfield;
+  class ColorLightfield;
   void correct(cv::InputArray src, cv::OutputArray dst, cv::Mat average);
 };
 
@@ -288,6 +289,15 @@ public:
   }
 };
 
+class illum::MultiLightfield {
+public:
+  virtual ~MultiLightfield() {}
+  virtual int addImage(cv::Mat image, double alt) = 0;
+  virtual void getAverage(cv::OutputArray _dst, double alt) = 0;
+  virtual void save(std::string outdir, std::string prefix="") = 0;
+  virtual int load(std::string outdir, std::string prefix="") = 0;
+};
+
 /**
  * A multi-altitude lightfield consisting of a set of lightfields each
  * of which is associated with a specific altitude class. Altitude classes
@@ -302,7 +312,7 @@ public:
  * a simple geometric model of the relative configuration of the camera and
  * an assumed flat substrate.
  */
-class illum::MultiLightfield {
+class illum::GrayLightfield : public illum::MultiLightfield {
 protected:
   boost::mutex* slices_mutex;
   typedef cv::Mat Mat;
@@ -332,7 +342,7 @@ public:
    * @param undertrain undertraining threshold (in number of images)
    * @param overtrain overtraining threshold (in number of images)
    */
-  MultiLightfield(double step_m=0.1, int undertrain=20, int overtrain=65535) {
+  GrayLightfield(double step_m=0.1, int undertrain=20, int overtrain=65535) {
     slices_mutex = new boost::mutex();
     alt_step = step_m;
     this->undertrain = undertrain;
@@ -483,13 +493,13 @@ public:
   }
 };
 
-class illum::RgbLightfield {
+class illum::ColorLightfield : public illum::MultiLightfield {
   typedef cv::Mat Mat;
   typedef std::string string; 
 protected:
-  illum::MultiLightfield* R;
-  illum::MultiLightfield* G;
-  illum::MultiLightfield* B;
+  illum::GrayLightfield* R;
+  illum::GrayLightfield* G;
+  illum::GrayLightfield* B;
 public:
   /**
    * Create a multi-altitude lightfield.
@@ -497,10 +507,10 @@ public:
    * @param undertrain undertraining threshold (in number of images)
    * @param overtrain overtraining threshold (in number of images)
    */
-  RgbLightfield(double step_m=0.1, int undertrain=20, int overtrain=65535) {
-    R = new MultiLightfield(step_m, undertrain, overtrain);
-    G = new MultiLightfield(step_m, undertrain, overtrain);
-    B = new MultiLightfield(step_m, undertrain, overtrain);
+  ColorLightfield(double step_m=0.1, int undertrain=20, int overtrain=65535) {
+    R = new GrayLightfield(step_m, undertrain, overtrain);
+    G = new GrayLightfield(step_m, undertrain, overtrain);
+    B = new GrayLightfield(step_m, undertrain, overtrain);
   }
   /**
    * Add an image to the lightfield
@@ -515,9 +525,11 @@ public:
     // extract color channels
     std::vector<cv::Mat> channels;
     cv::split(image32f, channels);
-    B->addImage(channels[0], alt);
-    G->addImage(channels[1], alt);
-    R->addImage(channels[2], alt);
+    int slices = 0;
+    slices += B->addImage(channels[0], alt);
+    slices += G->addImage(channels[1], alt);
+    slices += R->addImage(channels[2], alt);
+    return slices;
   }
   void logMetrics(Mat img, string name) {//FIXME debug
     double mn,mx;
@@ -556,7 +568,8 @@ public:
    *
    * @param outdir the output directory
    */
-  void save(string outdir) {
+  void save(string outdir, string prefix="") {
+    // FIXME concatenate any prefix arg
     R->save(outdir, R_PREFIX);
     G->save(outdir, G_PREFIX);
     B->save(outdir, B_PREFIX);
@@ -570,9 +583,12 @@ public:
    * @param outdir the output directory where the lightfield is stored
    * @return number of slices loaded
    */
-  int load(string outdir) {
-    R->load(outdir, R_PREFIX);
-    G->load(outdir, G_PREFIX);
-    B->load(outdir, B_PREFIX);
+  int load(string outdir, string prefix="") {
+    // FIXME concatenate any prefix arg
+    int loaded = 0;
+    loaded += R->load(outdir, R_PREFIX);
+    loaded += G->load(outdir, G_PREFIX);
+    loaded += B->load(outdir, B_PREFIX);
+    return loaded;
   }
 };
