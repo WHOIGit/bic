@@ -547,8 +547,8 @@ public:
   void getAverage(cv::OutputArray _dst, double alt) {
     cv::Mat Ra, Ga, Ba;
     R->getAverage(Ra, alt);
-    B->getAverage(Ga, alt);
-    G->getAverage(Ba, alt);
+    B->getAverage(Ba, alt);
+    G->getAverage(Ga, alt);
 
     // create BGR color image from each channel average
     std::vector<cv::Mat> bgr;
