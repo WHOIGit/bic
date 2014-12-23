@@ -214,11 +214,9 @@ void learn_task(WorkState* state, string inpath, double alt, double pitch, doubl
     log("START LEARN %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll;
     // read the image (this can be done in parallel)
     Mat image = read_image(inpath, state);
-    // FIXME in grayscale case, confirm 16 bit
     log("READ %s") % inpath;
     // determine altitude if necessary
-    if(state->params.stereo)
-      alt = compute_missing_alt(state, alt, image, inpath);
+    alt = compute_missing_alt(state, alt, image, inpath);
     // now learn the image
     learn_one(state, image, inpath, alt, pitch, roll);
     log("LEARNED %s") % inpath;
@@ -272,6 +270,7 @@ cv::Mat correct_one(WorkState* state, cv::Mat image, string inpath, double alt, 
   Mat rgb_8u;
   rgb_image = rgb_image * (255.0 / (max - min)) - (min * 255.0);
   rgb_image.convertTo(rgb_8u, CV_8U);
+  return rgb_image;
 }
 
 // return outpath if it is able and allowed to be written
@@ -288,7 +287,7 @@ string check_outpath(Params* params, string inpath, string outpath) {
 }
 
 // write a corrected image to its outpath
-void write_corrected(Params* params, cv::Mat rgb_LR, string outpath) {
+void write_corrected(Params* params, cv::Mat corrected, string outpath) {
   // now create output directory if necessary
   fs::path outp(outpath);
   fs::path outdir = outp.parent_path();
@@ -296,7 +295,7 @@ void write_corrected(Params* params, cv::Mat rgb_LR, string outpath) {
     fs::create_directories(outdir);
   // now write the output image
   log("SAVING corrected image to %s") % outpath;
-  if(!imwrite(outpath, rgb_LR))
+  if(!imwrite(outpath, corrected))
     throw std::runtime_error(str(format("ERROR: unable to write output image to %s") % outpath));
 }
 
@@ -308,14 +307,16 @@ void correct_task(WorkState* state, string inpath, double alt, double pitch, dou
     log("START CORRECT %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll;
     // construct the outpath, but throw exception if it exists and skip_existing is true
     outpath = check_outpath(params, inpath, outpath);
-    // read RAW image
-    Mat cfa_LR = read_image(inpath, state);
+    // read image
+    Mat image = read_image(inpath, state);
+    log("READ %s") % inpath;
     // if altitude is out of range, compute from parallax
-    alt = compute_missing_alt(state, alt, cfa_LR, inpath);
+    alt = compute_missing_alt(state, alt, image, inpath);
+    log("CORRECTING for altitude %.2f") % alt;
     // now correct the image
-    Mat rgb_LR = correct_one(state, cfa_LR, inpath, alt, pitch, roll);
+    Mat corrected_image = correct_one(state, image, inpath, alt, pitch, roll);
     // now write corrected image to outpath
-    write_corrected(params, rgb_LR, outpath);
+    write_corrected(params, corrected_image, outpath);
     log("CORRECTED %s") % inpath;
   } catch(std::runtime_error const &e) {
     log_error("DID NOT CORRECT %s: %s") % inpath % e.what();

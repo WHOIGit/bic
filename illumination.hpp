@@ -535,7 +535,7 @@ public:
   void logMetrics(Mat img, string name) {//FIXME debug
     double mn,mx;
     cv::minMaxLoc(img,&mn,&mx,NULL,NULL);
-    log("METRICS: %s: %.2f - %.2f") % name % mn % mx;
+    log("METRICS: %s: %dx%d, %.2f - %.2f") % name % img.cols % img.rows % mn % mx;
   }
   /**
    * Get the average image at the given altitude.
