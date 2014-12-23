@@ -230,7 +230,7 @@ void learn_task(WorkState* state, string inpath, double alt, double pitch, doubl
 }
 
 // correct one image (and return corrected image)
-cv::Mat correct_one(WorkState* state, cv::Mat cfa_LR, string inpath, double alt, double pitch, double roll) {
+cv::Mat correct_one(WorkState* state, cv::Mat image, string inpath, double alt, double pitch, double roll) {
   using cv::Mat;
   Params* params = &state->params;
   // get the average
@@ -239,28 +239,39 @@ cv::Mat correct_one(WorkState* state, cv::Mat cfa_LR, string inpath, double alt,
   // now smooth the average
   int h = average.size().height;
   int w = average.size().width;
-  if(params->stereo) {
-    Mat left = Mat(average,cv::Rect(0,0,w/2,h));
-    Mat right = Mat(average,cv::Rect(w/2,0,w/2,h));
-    cfa_smooth(left,left,params->lightmap_smoothing);
-    cfa_smooth(right,right,params->lightmap_smoothing);
+  // smooth lightmap, handling color/stereo cases
+  if(!params->color) {
+    if(params->stereo) {
+      Mat left = Mat(average,cv::Rect(0,0,w/2,h));
+      Mat right = Mat(average,cv::Rect(w/2,0,w/2,h));
+      cfa_smooth(left,left,params->lightmap_smoothing);
+      cfa_smooth(right,right,params->lightmap_smoothing);
+      log("SMOOTHED lightmap for %s") % inpath;
+    } else {
+      cfa_smooth(average,average,params->lightmap_smoothing);
+      log("SMOOTHED lightmap for %s") % inpath;
+    }
   } else {
-    cfa_smooth(average,average,params->lightmap_smoothing);
+    log("NOT SMOOTHING lightmap yet");
   }
-  log("SMOOTHED lightmap for %s") % inpath;
-  Mat corrected;
-  illum::correct(cfa_LR, corrected, average); // correct it
-  log("DEMOSAICING %s") % inpath;
-  // demosaic it
-  Mat rgb_LR = demosaic(corrected,params->bayer_pattern);
+  // correct, handling color/gray cases
+  Mat rgb_image;
+  if(params->color) {
+    illum::color_correct(image, rgb_image, average); // correct it
+  } else {
+    Mat mosaiced;
+    illum::gray_correct(image, mosaiced, average); // correct it
+    // demosaic it
+    log("DEMOSAICING %s") % inpath;
+    rgb_image = demosaic(mosaiced,params->bayer_pattern);
+  }
   // brightness and contrast parameters
   double max = params->max_brightness;
   double min = params->min_brightness;
   // adjust brightness/contrast and save as 8-bit png
-  Mat rgb_LR_8u;
-  rgb_LR = rgb_LR * (255.0 / (max - min)) - (min * 255.0);
-  rgb_LR.convertTo(rgb_LR_8u, CV_8U);
-  return rgb_LR_8u;
+  Mat rgb_8u;
+  rgb_image = rgb_image * (255.0 / (max - min)) - (min * 255.0);
+  rgb_image.convertTo(rgb_8u, CV_8U);
 }
 
 // return outpath if it is able and allowed to be written

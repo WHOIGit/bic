@@ -312,9 +312,9 @@ void rgb_correct_task(learn_correct::Params* params, illum::ColorLightfield* RGB
     std::vector<cv::Mat> in_chans;
     cv::split(bgr_frame, in_chans);
     cv::Mat Rc, Gc, Bc;
-    illum::correct(in_chans[0], Bc, avg_chans[0]);
-    illum::correct(in_chans[1], Gc, avg_chans[1]);
-    illum::correct(in_chans[2], Rc, avg_chans[2]);
+    illum::gray_correct(in_chans[0], Bc, avg_chans[0]);
+    illum::gray_correct(in_chans[1], Gc, avg_chans[1]);
+    illum::gray_correct(in_chans[2], Rc, avg_chans[2]);
     // now merge
     std::vector<cv::Mat> corr_chans;
     corr_chans.push_back(Bc);

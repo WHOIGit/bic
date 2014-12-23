@@ -58,7 +58,8 @@ namespace illum {
   class MultiLightfield;
   class GrayLightfield;
   class ColorLightfield;
-  void correct(cv::InputArray src, cv::OutputArray dst, cv::Mat average);
+  void gray_correct(cv::InputArray src, cv::OutputArray dst, cv::Mat average);
+  void color_correct(cv::InputArray src, cv::OutputArray dst, cv::Mat average);
 };
 
 /**
