@@ -25,6 +25,8 @@ using std::string;
 namespace fs = boost::filesystem;
 
 using illum::MultiLightfield;
+using illum::GrayLightfield;
+using illum::ColorLightfield;
 using learn_correct::Params;
 using stereo::CameraPair;
 using jlog::log;
@@ -51,7 +53,7 @@ private:
   }
   void write_lightmap(fs::path outdir) {
     log("SAVING lightmap in %s ...") % outdir;
-    model.save(outdir.string());
+    model->save(outdir.string());
     log("SAVED lightmap in %s") % outdir;
   }
   void write_skipfile(fs::path skipfile) {
@@ -80,12 +82,16 @@ private:
   }
 public:
   Params params;
-  illum::MultiLightfield model; // the lightfield
+  illum::MultiLightfield *model; // the lightfield
   stereo::CameraPair cameras; // the camera metrics
   WorkState(Params p) {
     params = p;
     cameras = CameraPair(p.camera_sep, p.focal_length, p.pixel_sep);
-    model = MultiLightfield(p.alt_spacing, p.undertrain, p.overtrain);
+    if(p.color) {
+      model = new ColorLightfield(p.alt_spacing, p.undertrain, p.overtrain);
+    } else {
+      model = new GrayLightfield(p.alt_spacing, p.undertrain, p.overtrain);
+    }
     // model = illum::VehicleLightfield(p.alt_spacing, cameras)
   }
   // checkpoint the current state of a learn process
@@ -113,7 +119,7 @@ public:
     fs::path outdir(_outdir.empty() ? params.lightmap_dir : _outdir);
     // now read lightmap
     log("LOADING lightmap from %s ...") % outdir;
-    int loaded = model.load(outdir.string());
+    int loaded = model->load(outdir.string());
     log("LOADED %d lightmap slices from %s") % loaded % outdir;
     return loaded;
   }
@@ -176,18 +182,23 @@ double compute_missing_alt(WorkState* state, double alt, cv::Mat cfa_LR, std::st
 }
 
 // read an image from a file and make sure it's 16-bit RAW
-cv::Mat read_16u(string inpath) {
-  cv::Mat img = cv::imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
+cv::Mat read_image(string inpath, WorkState *state) {
+  cv::Mat img;
+  if(!state->params.color) {
+    img = cv::imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
+    if(img.type() != CV_16U)
+      throw std::runtime_error(str(format("ERROR: image is not 16-bit grayscale: %s") % inpath));
+  } else {
+    img = cv::imread(inpath);
+  }
   if(!img.data)
     throw std::runtime_error(str(format("ERROR: unable to read image file: %s") % inpath));
-  if(img.type() != CV_16U)
-    throw std::runtime_error(str(format("ERROR: image is not 16-bit grayscale: %s") % inpath));
   return img;
 }
 
 // learn one image
 void learn_one(WorkState* state, cv::Mat cfa_LR, string inpath, double alt=0, double pitch=0, double roll=0) {
-  if(!state->model.addImage(cfa_LR, alt)) {
+  if(!state->model->addImage(cfa_LR, alt)) {
     log("SKIPPING learn for %s - lightmap slice(s) overtrained");
   } else {
     state->add_learned(inpath, alt, pitch, roll);
@@ -201,12 +212,12 @@ void learn_task(WorkState* state, string inpath, double alt, double pitch, doubl
   try  {
     log("START LEARN %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll;
     // read the image (this can be done in parallel)
-    Mat cfa_LR = read_16u(inpath);
+    Mat image = read_image(inpath, state);
     log("READ %s") % inpath;
     // determine altitude if necessary
-    alt = compute_missing_alt(state, alt, cfa_LR, inpath);
+    alt = compute_missing_alt(state, alt, image, inpath);
     // now learn the image
-    learn_one(state, cfa_LR, inpath, alt, pitch, roll);
+    learn_one(state, image, inpath, alt, pitch, roll);
     log("LEARNED %s") % inpath;
   } catch(std::runtime_error const &e) {
     log_error("DID NOT LEARN %s: %s") % inpath % e.what();
@@ -216,37 +227,55 @@ void learn_task(WorkState* state, string inpath, double alt, double pitch, doubl
 }
 
 // correct one image (and return corrected image)
-cv::Mat correct_one(WorkState* state, cv::Mat cfa_LR, string inpath, double alt, double pitch, double roll) {
+cv::Mat correct_one(WorkState* state, cv::Mat image, string inpath, double alt, double pitch, double roll) {
   using cv::Mat;
   Params* params = &state->params;
   // get the average
   Mat average;
-  state->model.getAverage(average, alt);
+  state->model->getAverage(average, alt);
   // now smooth the average
   int h = average.size().height;
   int w = average.size().width;
-  if(params->stereo) {
-    Mat left = Mat(average,cv::Rect(0,0,w/2,h));
-    Mat right = Mat(average,cv::Rect(w/2,0,w/2,h));
-    cfa_smooth(left,left,params->lightmap_smoothing);
-    cfa_smooth(right,right,params->lightmap_smoothing);
+  // smooth lightmap, handling color/stereo cases
+  if(!params->color) {
+    if(params->stereo) {
+      Mat left = Mat(average,cv::Rect(0,0,w/2,h));
+      Mat right = Mat(average,cv::Rect(w/2,0,w/2,h));
+      cfa_smooth(left,left,params->lightmap_smoothing);
+      cfa_smooth(right,right,params->lightmap_smoothing);
+      log("SMOOTHED lightmap for %s") % inpath;
+    } else {
+      cfa_smooth(average,average,params->lightmap_smoothing);
+      log("SMOOTHED lightmap for %s") % inpath;
+    }
   } else {
-    cfa_smooth(average,average,params->lightmap_smoothing);
+    // compute color kernel size from params
+    int ksize = (params->lightmap_smoothing * 2) + 1;
+    // compute sigma from ksize using standard formula
+    double sigma = 0.3*((ksize-1)*0.5 - 1) + 0.8;
+    // blur inplace
+    GaussianBlur(average,average,cv::Size(ksize,ksize),sigma,0,cv::BORDER_REFLECT);
+    log("SMOOTHED lightmap for %s") % inpath;
   }
-  log("SMOOTHED lightmap for %s") % inpath;
-  Mat corrected;
-  illum::correct(cfa_LR, corrected, average); // correct it
-  log("DEMOSAICING %s") % inpath;
-  // demosaic it
-  Mat rgb_LR = demosaic(corrected,params->bayer_pattern);
+  // correct, handling color/gray cases
+  Mat rgb_image;
+  if(params->color) {
+    illum::color_correct(image, rgb_image, average); // correct it
+  } else {
+    Mat mosaiced;
+    illum::gray_correct(image, mosaiced, average); // correct it
+    // demosaic it
+    log("DEMOSAICING %s") % inpath;
+    rgb_image = demosaic(mosaiced,params->bayer_pattern);
+  }
   // brightness and contrast parameters
   double max = params->max_brightness;
   double min = params->min_brightness;
   // adjust brightness/contrast and save as 8-bit png
-  Mat rgb_LR_8u;
-  rgb_LR = rgb_LR * (255.0 / (max - min)) - (min * 255.0);
-  rgb_LR.convertTo(rgb_LR_8u, CV_8U);
-  return rgb_LR_8u;
+  Mat rgb_8u;
+  rgb_image = rgb_image * (255.0 / (max - min)) - (min * 255.0);
+  rgb_image.convertTo(rgb_8u, CV_8U);
+  return rgb_image;
 }
 
 // return outpath if it is able and allowed to be written
@@ -263,7 +292,7 @@ string check_outpath(Params* params, string inpath, string outpath) {
 }
 
 // write a corrected image to its outpath
-void write_corrected(Params* params, cv::Mat rgb_LR, string outpath) {
+void write_corrected(Params* params, cv::Mat corrected, string outpath) {
   // now create output directory if necessary
   fs::path outp(outpath);
   fs::path outdir = outp.parent_path();
@@ -271,7 +300,7 @@ void write_corrected(Params* params, cv::Mat rgb_LR, string outpath) {
     fs::create_directories(outdir);
   // now write the output image
   log("SAVING corrected image to %s") % outpath;
-  if(!imwrite(outpath, rgb_LR))
+  if(!imwrite(outpath, corrected))
     throw std::runtime_error(str(format("ERROR: unable to write output image to %s") % outpath));
 }
 
@@ -283,14 +312,16 @@ void correct_task(WorkState* state, string inpath, double alt, double pitch, dou
     log("START CORRECT %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll;
     // construct the outpath, but throw exception if it exists and skip_existing is true
     outpath = check_outpath(params, inpath, outpath);
-    // read RAW image
-    Mat cfa_LR = read_16u(inpath);
+    // read image
+    Mat image = read_image(inpath, state);
+    log("READ %s") % inpath;
     // if altitude is out of range, compute from parallax
-    alt = compute_missing_alt(state, alt, cfa_LR, inpath);
+    alt = compute_missing_alt(state, alt, image, inpath);
+    log("CORRECTING for altitude %.2f") % alt;
     // now correct the image
-    Mat rgb_LR = correct_one(state, cfa_LR, inpath, alt, pitch, roll);
+    Mat corrected_image = correct_one(state, image, inpath, alt, pitch, roll);
     // now write corrected image to outpath
-    write_corrected(params, rgb_LR, outpath);
+    write_corrected(params, corrected_image, outpath);
     log("CORRECTED %s") % inpath;
   } catch(std::runtime_error const &e) {
     log_error("DID NOT CORRECT %s: %s") % inpath % e.what();
@@ -306,7 +337,7 @@ void adaptive_task(WorkState* state, string inpath, double alt, double pitch, do
   Mat cfa_LR;
   try {
     // read RAW image
-    cfa_LR = read_16u(inpath);
+    cfa_LR = read_image(inpath, state);
     log("READ %s") % inpath;
   } catch(std::exception) {
     log_error("ERROR failed to read %s") % inpath;

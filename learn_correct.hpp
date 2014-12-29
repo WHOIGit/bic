@@ -35,6 +35,7 @@
 #define OPT_UNDERTRAIN "undertrain" // undertraining threshold in numbers of images
 #define OPT_OVERTRAIN "overtrain" // overtraining threshold in numbers of images
 #define OPT_RESOLUTION "resolution" // resolution for some operations (e.g., "1920x1080")
+#define OPT_COLOR "color" // are the input images color
 
 namespace po = boost::program_options;
 
@@ -74,7 +75,7 @@ namespace learn_correct {
    */
   class Params {
   public:
-    /** Bayer pattern of raw images (e.g., rggb). Case-insensitive */
+    /** Bayer pattern of raw images (e.g., rggb), or 'rgb' for color. Case-insensitive */
     std::string bayer_pattern;
     /** Number of threads to use when processing (default: number of CPUs on host) */
     int n_threads;
@@ -123,6 +124,8 @@ namespace learn_correct {
     int resolution_x;
     /** Y resolution */
     int resolution_y;
+    /** color */
+    bool color;
     /**
      * Validate parameters. Checks for obviously invalid parameters
      * such as negative focal lengths, min_brightness > max_brightness,
@@ -134,9 +137,10 @@ namespace learn_correct {
      */
     void validate() {
       using namespace std;
-      if(bayer_pattern != "rggb" && bayer_pattern != "bggr" &&
-	 bayer_pattern != "grbg" && bayer_pattern != "gbrg")
+      if(!(bayer_pattern == "rggb" || bayer_pattern == "bggr" ||
+	   bayer_pattern == "grbg" || bayer_pattern == "gbrg")) {
 	throw std::logic_error("unrecognized bayer pattern");
+      }
       if(n_threads > boost::thread::hardware_concurrency())
 	cerr << "warning: number of threads greater than known number of hardware threads" << endl;
       if(alt_spacing <= 0)
@@ -212,6 +216,7 @@ namespace learn_correct {
       using std::string;
       input = options[OPT_INPUT].as<string>();
       bayer_pattern = options[OPT_BAYER_PATTERN].as<string>();
+      color = bayer_pattern == "rgb";
       boost::to_lower(bayer_pattern);
       n_threads = options[OPT_N_THREADS].as<int>();
       if(n_threads <= 0) { // if number of threads is not specified, find it out

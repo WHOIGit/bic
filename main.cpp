@@ -22,7 +22,7 @@ int main(int argc, char **argv) {
   copts.add_options()
     OPT(OPT_ALT_SPACING,"a",double,0.1,"distance between altitude bins (meters)")
     OPT(OPT_ALT_FROM_PARALLAX,"A",bool,false,"ignore altitude in input metadata and compute from parallax")
-    OPT(OPT_BAYER_PATTERN,"b",string,"rggb","bayer pattern (e.g., rggb)")
+    OPT(OPT_BAYER_PATTERN,"b",string,"rggb","bayer pattern (e.g., rggb) or rgb to indicate that input images are color")
     OPT(OPT_BATCH_SIZE,"B",int,65535,"number of images to learn between checkpoints (learn phase)")
     OPT(OPT_COMMAND,"c",string,"command","command to run")
     OPT(OPT_CAMERA_SEP,"C",double,0.235,"stereo camera spacing (meters)")
@@ -107,6 +107,10 @@ int main(int argc, char **argv) {
 	prototype::avg_by_alt(params);
       } else if(command=="redcyan") {
 	prototype::redcyan(params);
+      } else if(command=="rgb_learn") {
+	prototype::test_rgb_learn(params);
+      } else if(command=="rgb_correct") {
+	prototype::test_rgb_correct(params);
       } else {
 	cerr << "ERROR unknown command " << command << endl << copts << endl;
       }

@@ -24,11 +24,19 @@ namespace fs = boost::filesystem;
 using namespace std;
 using namespace cv;
 
+using boost::format;
+using boost::str;
+
 using jlog::log;
 using jlog::log_error;
 
-#define N_THREADS 12
+typedef boost::tokenizer< boost::escaped_list_separator<char> > Tokenizer;
+
+#define N_THREADS 4
 #define PATH_FILE "aprs.csv"
+
+// hardcoded altitude for RGB proof-of-concept
+#define RGB_ALT 1.5
 
 void prototype::test_effective_resolution(learn_correct::Params params) {
   using cv::Mat;
@@ -201,6 +209,191 @@ void prototype::test_flatness(learn_correct::Params params) {
   imwrite("avg_correct.jpg",BGR);
 }
 
+void rgb_learn_task(learn_correct::Params* params, illum::ColorLightfield* RGB, string inpath) {
+  using boost::algorithm::ends_with;
+  log("LEARN %s") % inpath;
+  try {
+    cv::Mat bgr_frame;
+    // assume 8-bit color tiff 
+    log("READING %s") % inpath;
+    bgr_frame = imread(inpath); // read it
+    log("METRICS %s %d channels, size %s x %s") % inpath % bgr_frame.channels() % bgr_frame.cols % bgr_frame.rows;
+    if(bgr_frame.empty()) {
+      log("SKIPPING no image data found for %s") % inpath;
+      return;
+    }
+    RGB->addImage(bgr_frame, RGB_ALT); // FIXME hardcoded altitude
+    log("ADDED %s") % inpath;
+  } catch(std::runtime_error const &e) {
+    log_error("ERROR adding %s: %s") % inpath % e.what();
+  } catch(std::exception) {
+    log_error("ERROR adding %s") % inpath;
+  }
+}
+
+void prototype::test_rgb_learn(learn_correct::Params params) {
+  using std::cerr;
+  using std::endl;
+  using std::string;
+  // before any OpenCV operations are done, set global error flag
+  cv::setBreakOnError(true);
+  // learn phase
+  illum::ColorLightfield RGB;
+  // post all work
+  boost::asio::io_service io_service;
+  boost::thread_group workers;
+  // start up the work threads
+  // use the work object to keep threads alive before jobs are posted
+  // use auto_ptr so we can indicate that no more jobs will be posted
+  auto_ptr<boost::asio::io_service::work> work(new boost::asio::io_service::work(io_service));
+  // create the thread pool
+  for(int i = 0; i < N_THREADS; i++) {
+    workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
+  }
+  // post jobs
+  istream *csv_in = learn_correct::get_input(params);
+  string line;
+  while(getline(*csv_in,line)) { // read pathames from a file
+    try {
+      std::vector<std::string> fields;
+      boost::algorithm::trim_right(line);
+      Tokenizer tok(line);
+      fields.assign(tok.begin(), tok.end());
+      string inpath = fields.at(0);
+      if(fs::exists(inpath)) {
+	io_service.post(boost::bind(rgb_learn_task, &params, &RGB, inpath));
+	log("QUEUED %s") % inpath;
+      } else {
+	log("WARNING: can't find %s") % inpath;
+      }
+    } catch(std::runtime_error const &e) {
+      log("ERROR parsing input metadata: %s") % e.what();
+    } catch(std::exception) {
+      log("ERROR parsing input metadata");
+    }
+  }
+  // destroy the work object to indicate that there are no more jobs
+  work.reset();
+  // now run all pending jobs to completion
+  workers.join_all();
+
+  fs::path outdir = params.lightmap_dir;
+  if(params.create_directories) {
+    log("CREATING output directory %s") % outdir.string();
+    fs::create_directories(outdir);
+  }
+  log("SAVING lightmap to %s") % params.lightmap_dir;
+  RGB.save(params.lightmap_dir);
+  log("DONE");
+}
+
+void rgb_correct_task(learn_correct::Params* params, illum::ColorLightfield* RGB, string inpath, string outpath) {
+  using boost::format;
+  log("CORRECT %s") % inpath;
+  try {
+    cv::Mat bgr_frame;
+    // assume 8-bit color tiff 
+    bgr_frame = imread(inpath); // read it
+    if(bgr_frame.empty())
+      return;
+    bgr_frame.convertTo(bgr_frame, CV_32FC3);
+    // FIXME debug
+    double mn,mx; // FIXME
+    cv::minMaxLoc(bgr_frame,&mn,&mx,NULL,NULL); // FIXME
+    log("METRICS %s minMax input = %.2f - %.2f") % inpath % mn % mx; // FIXME
+    // end debug
+    cv::Mat avg(bgr_frame.rows, bgr_frame.cols, CV_32FC3);
+    RGB->getAverage(avg, RGB_ALT); // FIXME hardcoded altitude
+    cv::minMaxLoc(avg,&mn,&mx,NULL,NULL); // FIXME
+    log("METRICS %s minMax avg = %.2f - %.2f") % inpath % mn % mx; // FIXME
+    // now split into channels and correct channel-wise
+    std::vector<cv::Mat> avg_chans;
+    cv::split(avg, avg_chans);
+    std::vector<cv::Mat> in_chans;
+    cv::split(bgr_frame, in_chans);
+    cv::Mat Rc, Gc, Bc;
+    illum::gray_correct(in_chans[0], Bc, avg_chans[0]);
+    illum::gray_correct(in_chans[1], Gc, avg_chans[1]);
+    illum::gray_correct(in_chans[2], Rc, avg_chans[2]);
+    // now merge
+    std::vector<cv::Mat> corr_chans;
+    corr_chans.push_back(Bc);
+    corr_chans.push_back(Gc);
+    corr_chans.push_back(Rc);
+    cv::Mat corrected;
+    cv::merge(corr_chans, corrected);
+    log("CORRECTED %s") % inpath;
+    // now create output directory if necessary
+    fs::path outp(outpath);
+    fs::path outdir = outp.parent_path();
+    if(params->create_directories)
+      fs::create_directories(outdir);
+    //log("NO SMOOTHING for %s") % inpath;
+    // brightness and contrast parameters
+    double max = params->max_brightness;
+    double min = params->min_brightness;
+    // adjust brightness/contrast and save as 8-bit png
+    Mat rgb_8uc3;
+    corrected = corrected * (255.0 / (max - min)) - (min * 255.0);
+    log("ADJUSTED contrast/brightness for %s") % inpath;
+    corrected.convertTo(rgb_8uc3, CV_8UC3);
+    // now write the output image
+    log("SAVING corrected image to %s") % outpath;
+    if(!imwrite(outpath, rgb_8uc3))
+      throw std::runtime_error(str(format("ERROR: unable to write output image to %s") % outpath));
+  } catch(std::runtime_error const &e) {
+    log_error("ERROR correcting %s: %s") % inpath % e.what();
+  } catch(std::exception const &e) {
+    log_error("ERROR correcting %s: %s") % inpath % e.what();
+  }
+}
+
+void prototype::test_rgb_correct(learn_correct::Params params) {
+  log("LOADING lightmap from %s") % params.lightmap_dir;
+  illum::ColorLightfield RGB;
+  RGB.load(params.lightmap_dir);
+  // post all work
+  boost::asio::io_service io_service;
+  boost::thread_group workers;
+  // start up the work threads
+  // use the work object to keep threads alive before jobs are posted
+  // use auto_ptr so we can indicate that no more jobs will be posted
+  auto_ptr<boost::asio::io_service::work> work(new boost::asio::io_service::work(io_service));
+  // create the thread pool
+  for(int i = 0; i < N_THREADS; i++) {
+    workers.create_thread(boost::bind(&boost::asio::io_service::run, &io_service));
+  }
+  // post jobs
+  istream *csv_in = learn_correct::get_input(params);
+  string line;
+  while(getline(*csv_in,line)) { // read pathames from a file
+    try {
+      std::vector<std::string> fields;
+      boost::algorithm::trim_right(line);
+      Tokenizer tok(line);
+      fields.assign(tok.begin(), tok.end());
+      string inpath = fields.at(0);
+      string outpath = fields.at(1);
+      if(fs::exists(inpath)) {
+	io_service.post(boost::bind(rgb_correct_task, &params, &RGB, inpath, outpath));
+	log("QUEUED %s -> %s") % inpath % outpath;
+      } else {
+	log("WARNING: can't find %s") % inpath;
+      }
+    } catch(std::runtime_error const &e) {
+      log("ERROR parsing input metadata: %s") % e.what();
+    } catch(std::exception) {
+      log("ERROR parsing input metadata");
+    }
+  }
+  // destroy the work object to indicate that there are no more jobs
+  work.reset();
+  // now run all pending jobs to completion
+  workers.join_all();
+
+  log("DONE");
+}
+
 void prototype::test_dm() {
   using cv::Mat;
   using std::cout;
@@ -258,7 +451,7 @@ void prototype::afp(learn_correct::Params p) {
 void prototype::test_interpolation(learn_correct::Params p) {
   using boost::format;
   using boost::str;
-  illum::MultiLightfield model(p.alt_spacing); // the lightfield
+  illum::GrayLightfield model(p.alt_spacing); // the lightfield
   //stereo::CameraPair cameras; // the camera metrics
   //cameras = CameraPair(p.camera_sep, p.focal_length, p.pixel_sep);
   // now read lightmap

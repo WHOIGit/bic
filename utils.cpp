@@ -128,7 +128,7 @@ void utils::view_xeye(Params params) {
 }
 
 void utils::thumb_lightmap(Params params) {
-  illum::MultiLightfield lightmap(params.alt_spacing);
+  illum::GrayLightfield lightmap(params.alt_spacing);
   if(params.lightmap_dir.empty())
     throw std::runtime_error("no lightmap directory specified");
   log("LOADING lightmap ...");
@@ -145,8 +145,8 @@ void utils::thumb_lightmap(Params params) {
       p /= str(boost::format("thumb_slice_%.02f.jpg") % alt);
       log("SAVING thumbnail %s") % p.string();
       imwrite(p.string(), bgr_avg);
-    } catch(std::exception) {
-      // silently ignore
+    } catch(std::exception const &e) {
+      log_error("ERROR thumbnailing: %s") % e.what();
     }
   }
 }
