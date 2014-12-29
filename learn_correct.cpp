@@ -249,7 +249,13 @@ cv::Mat correct_one(WorkState* state, cv::Mat image, string inpath, double alt, 
       log("SMOOTHED lightmap for %s") % inpath;
     }
   } else {
-    log("NOT SMOOTHING lightmap yet");
+    // compute color kernel size from params
+    int ksize = (params->lightmap_smoothing * 2) + 1;
+    // compute sigma from ksize using standard formula
+    double sigma = 0.3*((ksize-1)*0.5 - 1) + 0.8;
+    // blur inplace
+    GaussianBlur(average,average,cv::Size(ksize,ksize),sigma,0,cv::BORDER_REFLECT);
+    log("SMOOTHED lightmap for %s") % inpath;
   }
   // correct, handling color/gray cases
   Mat rgb_image;
