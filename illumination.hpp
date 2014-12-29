@@ -13,9 +13,6 @@
 
 #include "interpolation.hpp"
 #include "stereo.hpp"
-#include "logging.hpp" // FIXME debug
-
-using jlog::log; // FIXME debug
 
 namespace fs = boost::filesystem;
 
@@ -532,11 +529,6 @@ public:
     slices += R->addImage(channels[2], alt);
     return slices;
   }
-  void logMetrics(Mat img, string name) {//FIXME debug
-    double mn,mx;
-    cv::minMaxLoc(img,&mn,&mx,NULL,NULL);
-    log("METRICS: %s: %dx%d, %.2f - %.2f") % name % img.cols % img.rows % mn % mx;
-  }
   /**
    * Get the average image at the given altitude.
    * If the altitude is not located exactly at one of the altitude bins,
@@ -559,7 +551,6 @@ public:
     _dst.create(Ra.size(), CV_32FC3); // 32-bit, 3-channel
     dst = _dst.getMat();
     cv::merge(bgr, dst);
-    logMetrics(dst,"color average"); // FIXME
   }
   /**
    * Save the multi-lightfield to a directory. The lightfield is

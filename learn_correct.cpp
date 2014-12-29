@@ -185,7 +185,6 @@ double compute_missing_alt(WorkState* state, double alt, cv::Mat cfa_LR, std::st
 cv::Mat read_image(string inpath, WorkState *state) {
   cv::Mat img;
   if(!state->params.color) {
-    log("looking for grayscale image"); // FIXME debug
     img = cv::imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
     if(img.type() != CV_16U)
       throw std::runtime_error(str(format("ERROR: image is not 16-bit grayscale: %s") % inpath));
