@@ -234,6 +234,7 @@ void cfa_quad(InputArray _src, OutputArray _dst) {
   int r2 = src.rows/2;
   for(int x = 0; x < src.cols; x++) {
     for(int y = 0; y < src.rows; y++) {
+      // FIXME add explicit casts
       if(x < c2) {
 	xMap.at<float>(y,x) = x * 2;
       } else {
