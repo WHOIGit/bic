@@ -14,4 +14,5 @@ namespace prototype {
   void redcyan(learn_correct::Params);
   void test_rgb_learn(learn_correct::Params);
   void test_rgb_correct(learn_correct::Params);
+  void test_rectify();
 }

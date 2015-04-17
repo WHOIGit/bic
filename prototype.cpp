@@ -19,6 +19,10 @@
 #include "stereo.hpp"
 #include "logging.hpp"
 
+#include "StereoStructDefines.h"
+#include "AltitudeFromStereo.h"
+#include "DataIO.h"
+
 namespace fs = boost::filesystem;
 
 using namespace std;
@@ -654,4 +658,12 @@ void prototype::redcyan(learn_correct::Params params) {
   imshow( "Display Image", redcyan );
 
   waitKey(0);
+}
+
+void prototype::test_rectify() {
+  CameraMatrix cameraMatrix;
+
+  std::cout << "Reading camera matrices" << std::endl;
+  ReadCameraMatrices("/vagrant/2014CalibrationData",cameraMatrix);
+  std::cout << "Done reading camera matrices" << std::endl;
 }

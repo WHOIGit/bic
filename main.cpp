@@ -111,6 +111,8 @@ int main(int argc, char **argv) {
 	prototype::test_rgb_learn(params);
       } else if(command=="rgb_correct") {
 	prototype::test_rgb_correct(params);
+      } else if(command=="test_rectify") {
+	prototype::test_rectify();
       } else {
 	cerr << "ERROR unknown command " << command << endl << copts << endl;
       }
