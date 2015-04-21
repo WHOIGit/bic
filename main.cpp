@@ -44,6 +44,7 @@ int main(int argc, char **argv) {
     OPT(OPT_STEREO,"S",bool,true,"treat images as side-by-side stereo pairs")
     OPT(OPT_N_THREADS,"t",int,0,"number of threads")
     OPT(OPT_UPDATE,"u",string,"","update existing lightmap instead of creating new one (default: don't update a lightmap)")
+    OPT(OPT_CALIBRATION_DIR,"y",string,"","directory containing camera calibration matrices")
     ;
   po::variables_map options;
   Params params;

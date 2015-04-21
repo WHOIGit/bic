@@ -20,6 +20,10 @@
 #include "interpolation.hpp"
 #include "logging.hpp"
 
+#include "StereoStructDefines.h"
+#include "AltitudeFromStereo.h"
+#include "DataIO.h"
+
 using std::string;
 
 namespace fs = boost::filesystem;
@@ -84,15 +88,19 @@ public:
   Params params;
   illum::MultiLightfield *model; // the lightfield
   stereo::CameraPair cameras; // the camera metrics
+  CameraMatrix cameraMatrix;
   WorkState(Params p) {
     params = p;
     cameras = CameraPair(p.camera_sep, p.focal_length, p.pixel_sep);
-    if(p.color) {
+    if(should_rectify()) {
+      ReadCameraMatrices(p.calibration_dir,cameraMatrix);
+      log("READ calibration matrices from %s") % p.calibration_dir;
+    }
+    if(color_lightfield()) {
       model = new ColorLightfield(p.alt_spacing, p.undertrain, p.overtrain);
     } else {
       model = new GrayLightfield(p.alt_spacing, p.undertrain, p.overtrain);
     }
-    // model = illum::VehicleLightfield(p.alt_spacing, cameras)
   }
   // checkpoint the current state of a learn process
   void checkpoint(string _outdir="") {
@@ -151,16 +159,25 @@ public:
   bool should_skip(string inpath) {
     return skip.count(inpath) > 0;
   }
+  bool should_rectify() {
+    return !params.calibration_dir.empty();
+  }
+  bool color_lightfield() {
+    return params.color || should_rectify();
+  }
+  bool should_compute_alt(double alt) {
+    if(!params.stereo)
+      return false;
+    if(!params.alt_from_parallax && alt > 0 && alt < MAX_ALTITUDE)
+      return false;
+    return true;
+  }
 };
 
 double compute_missing_alt(WorkState* state, double alt, cv::Mat cfa_LR, std::string inpath) {
   using stereo::align;
   using cv::Mat;
-  // if images are not stereo, do not attempt to compute altitude from parallax
-  if(!state->params.stereo)
-    return alt;
-  // if altitude is good, don't recompute it
-  if(!state->params.alt_from_parallax && alt > 0 && alt < MAX_ALTITUDE)
+  if(!state->should_compute_alt(alt))
     return alt;
   // compute from parallax
   // pull green channel
@@ -185,7 +202,7 @@ double compute_missing_alt(WorkState* state, double alt, cv::Mat cfa_LR, std::st
 cv::Mat read_image(string inpath, WorkState *state) {
   cv::Mat img;
   if(!state->params.color) {
-    img = cv::imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
+    img = cv::imread(inpath, CV_LOAD_IMAGE_ANYCOLOR | CV_LOAD_IMAGE_ANYDEPTH);
     if(img.type() != CV_16U)
       throw std::runtime_error(str(format("ERROR: image is not 16-bit grayscale: %s") % inpath));
   } else {
@@ -205,9 +222,24 @@ void learn_one(WorkState* state, cv::Mat cfa_LR, string inpath, double alt=0, do
   }
 }
 
+double alt_from_stereo(WorkState* state, cv::Mat image, cv::Mat &rectified) {
+  cv::Mat rgbImage;
+  if(!state->params.color) {
+    rgbImage = demosaic(image, state->params.bayer_pattern);
+  } else {
+    rgbImage = image;
+  }
+  PointCloud pointCloud;
+  double alt = AltitudeFromStereo(rgbImage, state->cameraMatrix, rectified, pointCloud,
+				  false, false, false, false) / 1000.0;
+  // FIXME don't discard pointcloud
+  return alt;
+}
+
 // the learn task adds an image to a multilightfield model
 void learn_task(WorkState* state, string inpath, double alt, double pitch, double roll) {
   using cv::Mat;
+  Params* params = &state->params;
   // get the input pathname
   try  {
     log("START LEARN %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll;
@@ -215,7 +247,12 @@ void learn_task(WorkState* state, string inpath, double alt, double pitch, doubl
     Mat image = read_image(inpath, state);
     log("READ %s") % inpath;
     // determine altitude if necessary
-    alt = compute_missing_alt(state, alt, image, inpath);
+    cv::Mat rectified;
+    if(state->should_rectify()) {
+      alt = alt_from_stereo(state, image, rectified);
+      log("STEREO altitude of %s is %.2f") % inpath % alt;
+      image = rectified;
+    }
     // now learn the image
     learn_one(state, image, inpath, alt, pitch, roll);
     log("LEARNED %s") % inpath;
@@ -259,7 +296,7 @@ cv::Mat correct_one(WorkState* state, cv::Mat image, string inpath, double alt, 
   }
   // correct, handling color/gray cases
   Mat rgb_image;
-  if(params->color) {
+  if(state->color_lightfield()) {
     illum::color_correct(image, rgb_image, average); // correct it
   } else {
     Mat mosaiced;
@@ -315,9 +352,15 @@ void correct_task(WorkState* state, string inpath, double alt, double pitch, dou
     // read image
     Mat image = read_image(inpath, state);
     log("READ %s") % inpath;
-    // if altitude is out of range, compute from parallax
-    alt = compute_missing_alt(state, alt, image, inpath);
-    log("CORRECTING for altitude %.2f") % alt;
+    // determine altitude if necessary
+    cv::Mat rectified;
+    if(state->should_rectify()) {
+      alt = alt_from_stereo(state, image, rectified);
+      log("STEREO altitude of %s is %.2f") % inpath % alt;
+      image = rectified;
+    } else {
+      log("CORRECTING for altitude %.2f") % alt;
+    }
     // now correct the image
     Mat corrected_image = correct_one(state, image, inpath, alt, pitch, roll);
     // now write corrected image to outpath

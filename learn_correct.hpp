@@ -36,6 +36,7 @@
 #define OPT_OVERTRAIN "overtrain" // overtraining threshold in numbers of images
 #define OPT_RESOLUTION "resolution" // resolution for some operations (e.g., "1920x1080")
 #define OPT_COLOR "color" // are the input images color
+#define OPT_CALIBRATION_DIR "calibration" // camera calibration directory for pointcloud stereo
 
 namespace po = boost::program_options;
 
@@ -126,6 +127,9 @@ namespace learn_correct {
     int resolution_y;
     /** color */
     bool color;
+    /** dir for calibration matrices */
+    std::string calibration_dir;
+
     /**
      * Validate parameters. Checks for obviously invalid parameters
      * such as negative focal lengths, min_brightness > max_brightness,
@@ -216,8 +220,8 @@ namespace learn_correct {
       using std::string;
       input = options[OPT_INPUT].as<string>();
       bayer_pattern = options[OPT_BAYER_PATTERN].as<string>();
-      color = bayer_pattern == "rgb";
       boost::to_lower(bayer_pattern);
+      color = bayer_pattern == "rgb";
       n_threads = options[OPT_N_THREADS].as<int>();
       if(n_threads <= 0) { // if number of threads is not specified, find it out
 	n_threads = boost::thread::hardware_concurrency();
@@ -242,6 +246,7 @@ namespace learn_correct {
       undertrain = options[OPT_UNDERTRAIN].as<int>();
       overtrain = options[OPT_OVERTRAIN].as<int>();
       parse_resolution(options[OPT_RESOLUTION].as<string>());
+      calibration_dir = options[OPT_CALIBRATION_DIR].as<string>();
       if(_validate)
 	validate();
     }
@@ -278,6 +283,7 @@ namespace learn_correct {
       strm << OPT_UNDERTRAIN << " = " << p.undertrain << endl;
       strm << OPT_OVERTRAIN << " = " << p.overtrain << endl;
       strm << OPT_RESOLUTION << p.resolution_x << "x" << p.resolution_y << endl;
+      strm << OPT_CALIBRATION_DIR << p.calibration_dir << endl;
       return strm;
     }
   };
