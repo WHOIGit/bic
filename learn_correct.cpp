@@ -22,6 +22,7 @@
 
 #include "StereoStructDefines.h"
 #include "AltitudeFromStereo.h"
+#include "RectifyImage.h"
 #include "DataIO.h"
 
 using std::string;
@@ -222,8 +223,8 @@ void learn_one(WorkState* state, cv::Mat cfa_LR, string inpath, double alt=0, do
   }
 }
 
-double alt_from_stereo(WorkState* state, cv::Mat image, cv::Mat &rectified) {
-  cv::Mat rgbImage;
+double alt_from_stereo(WorkState* state, cv::Mat image, cv::Mat &rgbImage) {
+  cv::Mat rectified;
   if(!state->params.color) {
     rgbImage = demosaic(image, state->params.bayer_pattern);
   } else {
@@ -247,11 +248,12 @@ void learn_task(WorkState* state, string inpath, double alt, double pitch, doubl
     Mat image = read_image(inpath, state);
     log("READ %s") % inpath;
     // determine altitude if necessary
-    cv::Mat rectified;
+    cv::Mat rgbImage;
     if(state->should_rectify()) {
-      alt = alt_from_stereo(state, image, rectified);
+      alt = alt_from_stereo(state, image, rgbImage);
       log("STEREO altitude of %s is %.2f") % inpath % alt;
-      image = rectified;
+      // learn unrectified color image
+      image = rgbImage;
     }
     // now learn the image
     learn_one(state, image, inpath, alt, pitch, roll);
@@ -305,6 +307,10 @@ cv::Mat correct_one(WorkState* state, cv::Mat image, string inpath, double alt, 
     log("DEMOSAICING %s") % inpath;
     rgb_image = demosaic(mosaiced,params->bayer_pattern);
   }
+  // finally, rectify the image
+  if(state->should_rectify()) {
+    rgb_image = RectifyImage(rgb_image, state->cameraMatrix, false, false);
+  }
   // brightness and contrast parameters
   double max = params->max_brightness;
   double min = params->min_brightness;
@@ -353,11 +359,12 @@ void correct_task(WorkState* state, string inpath, double alt, double pitch, dou
     Mat image = read_image(inpath, state);
     log("READ %s") % inpath;
     // determine altitude if necessary
-    cv::Mat rectified;
+    cv::Mat rgbImage;
     if(state->should_rectify()) {
-      alt = alt_from_stereo(state, image, rectified);
+      alt = alt_from_stereo(state, image, rgbImage);
       log("STEREO altitude of %s is %.2f") % inpath % alt;
-      image = rectified;
+      // correct unrectified color image
+      image = rgbImage;
     } else {
       log("CORRECTING for altitude %.2f") % alt;
     }
