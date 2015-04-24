@@ -348,13 +348,14 @@ void write_corrected(Params* params, cv::Mat corrected, string outpath) {
 }
 
 void write_pointcloud(Params* params, PointCloud pc, string outpath) {
+  if(params->pointcloud_prefix.empty())
+    return;
   fs::path outp(outpath);
   fs::path outdir = outp.parent_path();
   if(params->create_directories)
     fs::create_directories(outdir);
   // now write the output image
   log("SAVING pointcloud to %s") % outpath;
-  //
   cv::Mat ignored;
   WritePointCloud(outpath, pc, ignored, PC_BINARY);
 }
