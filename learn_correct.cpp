@@ -475,7 +475,7 @@ std::string learn_correct::construct_outpath(learn_correct::Params p, string inp
 std::string learn_correct::construct_pointcloud_path(learn_correct::Params p, string inpath) {
   string outpath = learn_correct::construct_path(p.path_prefix_in, p.pointcloud_prefix, inpath);
   boost::regex re("\\.tiff?$", boost::regex::icase);
-  outpath = regex_replace(outpath,re,".dat");
+  outpath = regex_replace(outpath,re,"");
   return outpath;
 }
 
