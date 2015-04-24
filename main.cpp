@@ -45,6 +45,7 @@ int main(int argc, char **argv) {
     OPT(OPT_N_THREADS,"t",int,0,"number of threads")
     OPT(OPT_UPDATE,"u",string,"","update existing lightmap instead of creating new one (default: don't update a lightmap)")
     OPT(OPT_CALIBRATION_DIR,"y",string,"","directory containing camera calibration matrices")
+    OPT(OPT_POINTCLOUD_PREFIX,"Y",string,"","prefix to prepend when constructing pointlcloud output pathnames")
     ;
   po::variables_map options;
   Params params;

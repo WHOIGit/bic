@@ -223,17 +223,15 @@ void learn_one(WorkState* state, cv::Mat cfa_LR, string inpath, double alt=0, do
   }
 }
 
-double alt_from_stereo(WorkState* state, cv::Mat image, cv::Mat &rgbImage) {
+double alt_from_stereo(WorkState* state, cv::Mat image, cv::Mat &rgbImage, PointCloud &pointCloud) {
   cv::Mat rectified;
   if(!state->params.color) {
     rgbImage = demosaic(image, state->params.bayer_pattern);
   } else {
     rgbImage = image;
   }
-  PointCloud pointCloud;
   double alt = AltitudeFromStereo(rgbImage, state->cameraMatrix, rectified, pointCloud,
 				  false, false, false, false) / 1000.0;
-  // FIXME don't discard pointcloud
   return alt;
 }
 
@@ -250,10 +248,12 @@ void learn_task(WorkState* state, string inpath, double alt, double pitch, doubl
     // determine altitude if necessary
     cv::Mat rgbImage;
     if(state->should_rectify()) {
-      alt = alt_from_stereo(state, image, rgbImage);
+      PointCloud pointCloud;
+      alt = alt_from_stereo(state, image, rgbImage, pointCloud);
       log("STEREO altitude of %s is %.2f") % inpath % alt;
       // learn unrectified color image
       image = rgbImage;
+      // note: discards pointcloud
     }
     // now learn the image
     learn_one(state, image, inpath, alt, pitch, roll);
@@ -361,10 +361,12 @@ void correct_task(WorkState* state, string inpath, double alt, double pitch, dou
     // determine altitude if necessary
     cv::Mat rgbImage;
     if(state->should_rectify()) {
-      alt = alt_from_stereo(state, image, rgbImage);
+      PointCloud pointCloud;
+      alt = alt_from_stereo(state, image, rgbImage, pointCloud);
       log("STEREO altitude of %s is %.2f") % inpath % alt;
       // correct unrectified color image
       image = rgbImage;
+      // FIXME save pointcloud in appropriate place
     } else {
       log("CORRECTING for altitude %.2f") % alt;
     }
@@ -435,20 +437,30 @@ std::istream* learn_correct::get_input(learn_correct::Params p) {
   }
 }
 
-std::string learn_correct::construct_outpath(learn_correct::Params p, string inpath) {
+std::string learn_correct::construct_path(string in_prefix, string out_prefix, string inpath) {
   using boost::algorithm::replace_first;
-  using boost::algorithm::ends_with;
   string outpath;
   if(inpath.empty())
-    throw std::runtime_error("cannot construct output pathname from empty input pathname");
-  if(!p.path_prefix_in.empty()) {
+    throw std::runtime_error("cannot construct path from empty input pathname");
+  if(!in_prefix.empty()) {
     outpath = inpath;
-    replace_first(outpath, p.path_prefix_in, p.path_prefix_out);
-  } else if(!p.path_prefix_out.empty()) {
-    outpath = p.path_prefix_out + inpath;
+    replace_first(outpath, in_prefix, out_prefix);
+  } else if(!out_prefix.empty()) {
+    outpath = out_prefix + inpath;
   }
+}
+
+std::string learn_correct::construct_outpath(learn_correct::Params p, string inpath) {
+  string outpath = learn_correct::construct_path(p.path_prefix_in, p.path_prefix_out, inpath);
   boost::regex re("\\.tiff?$", boost::regex::icase);
   outpath = regex_replace(outpath,re,".png");
+  return outpath;
+}
+
+std::string learn_correct::construct_pointcloud_path(learn_correct::Params p, string inpath) {
+  string outpath = learn_correct::construct_path(p.path_prefix_in, p.pointcloud_prefix, inpath);
+  boost::regex re("\\.tiff?$", boost::regex::icase);
+  outpath = regex_replace(outpath,re,".dat");
   return outpath;
 }
 

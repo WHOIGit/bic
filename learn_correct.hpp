@@ -37,6 +37,7 @@
 #define OPT_RESOLUTION "resolution" // resolution for some operations (e.g., "1920x1080")
 #define OPT_COLOR "color" // are the input images color
 #define OPT_CALIBRATION_DIR "calibration" // camera calibration directory for pointcloud stereo
+#define OPT_POINTCLOUD_PREFIX "pointcloud_prefix" // strip or replace input path prefix to construct pointcloud prefix
 
 namespace po = boost::program_options;
 
@@ -129,6 +130,8 @@ namespace learn_correct {
     bool color;
     /** dir for calibration matrices */
     std::string calibration_dir;
+    /** prefix for pointcloud output */
+    std::string pointcloud_prefix;
 
     /**
      * Validate parameters. Checks for obviously invalid parameters
@@ -247,6 +250,7 @@ namespace learn_correct {
       overtrain = options[OPT_OVERTRAIN].as<int>();
       parse_resolution(options[OPT_RESOLUTION].as<string>());
       calibration_dir = options[OPT_CALIBRATION_DIR].as<string>();
+      pointcloud_prefix = options[OPT_POINTCLOUD_PREFIX].as<string>();
       if(_validate)
 	validate();
     }
@@ -284,6 +288,7 @@ namespace learn_correct {
       strm << OPT_OVERTRAIN << " = " << p.overtrain << endl;
       strm << OPT_RESOLUTION << p.resolution_x << "x" << p.resolution_y << endl;
       strm << OPT_CALIBRATION_DIR << p.calibration_dir << endl;
+      strm << OPT_POINTCLOUD_PREFIX << p.pointcloud_prefix << endl;
       return strm;
     }
   };
@@ -291,7 +296,9 @@ namespace learn_correct {
   /**
    * Construct outpath from inpath
    */
+  std::string construct_path(std::string in_prefix, std::string out_prefix, std::string inpath);
   std::string construct_outpath(Params p, std::string inpath);
+  std::string construct_pointcloud_path(Params p, std::string inpath);
 
   // primary work scripts
 
