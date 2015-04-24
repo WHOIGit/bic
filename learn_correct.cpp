@@ -347,6 +347,18 @@ void write_corrected(Params* params, cv::Mat corrected, string outpath) {
     throw std::runtime_error(str(format("ERROR: unable to write output image to %s") % outpath));
 }
 
+void write_pointcloud(Params* params, PointCloud pc, string outpath) {
+  fs::path outp(outpath);
+  fs::path outdir = outp.parent_path();
+  if(params->create_directories)
+    fs::create_directories(outdir);
+  // now write the output image
+  log("SAVING pointcloud to %s") % outpath;
+  //
+  cv::Mat ignored;
+  WritePointCloud(outpath, pc, ignored, PC_BINARY);
+}
+
 // the correct task corrects images
 void correct_task(WorkState* state, string inpath, double alt, double pitch, double roll, string outpath) {
   using cv::Mat;
@@ -367,6 +379,8 @@ void correct_task(WorkState* state, string inpath, double alt, double pitch, dou
       // correct unrectified color image
       image = rgbImage;
       // FIXME save pointcloud in appropriate place
+      string pc_outpath = learn_correct::construct_pointcloud_path(*params, inpath);
+      write_pointcloud(params, pointCloud, pc_outpath);
     } else {
       log("CORRECTING for altitude %.2f") % alt;
     }
@@ -448,6 +462,7 @@ std::string learn_correct::construct_path(string in_prefix, string out_prefix, s
   } else if(!out_prefix.empty()) {
     outpath = out_prefix + inpath;
   }
+  return outpath;
 }
 
 std::string learn_correct::construct_outpath(learn_correct::Params p, string inpath) {
