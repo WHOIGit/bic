@@ -247,7 +247,7 @@ void learn_task(WorkState* state, string inpath, double alt, double pitch, doubl
     log("READ %s") % inpath;
     // determine altitude if necessary
     cv::Mat rgbImage;
-    if(state->should_rectify()) {
+    if(state->should_rectify() && state->should_compute_alt(alt)) {
       PointCloud pointCloud;
       alt = alt_from_stereo(state, image, rgbImage, pointCloud);
       log("STEREO altitude of %s is %.2f") % inpath % alt;
@@ -373,7 +373,7 @@ void correct_task(WorkState* state, string inpath, double alt, double pitch, dou
     log("READ %s") % inpath;
     // determine altitude if necessary
     cv::Mat rgbImage;
-    if(state->should_rectify()) {
+    if(state->should_rectify() && state->should_compute_alt(alt)) {
       PointCloud pointCloud;
       alt = alt_from_stereo(state, image, rgbImage, pointCloud);
       log("STEREO altitude of %s is %.2f") % inpath % alt;
