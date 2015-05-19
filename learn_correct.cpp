@@ -247,13 +247,20 @@ void learn_task(WorkState* state, string inpath, double alt, double pitch, doubl
     log("READ %s") % inpath;
     // determine altitude if necessary
     cv::Mat rgbImage;
-    if(state->should_rectify() && state->should_compute_alt(alt)) {
-      PointCloud pointCloud;
-      alt = alt_from_stereo(state, image, rgbImage, pointCloud);
-      log("STEREO altitude of %s is %.2f") % inpath % alt;
-      // learn unrectified color image
-      image = rgbImage;
-      // note: discards pointcloud
+    if(state->should_rectify()) {
+      if(state->should_compute_alt(alt)) {
+	PointCloud pointCloud;
+	alt = alt_from_stereo(state, image, rgbImage, pointCloud);
+	log("STEREO altitude of %s is %.2f") % inpath % alt;
+	// learn unrectified color image
+	image = rgbImage;
+	// note: discards pointcloud
+      } else if(!params->color) {
+	// still need to demosaic image in the rectifying, RAW case
+	image = demosaic(image, params->bayer_pattern);
+      }
+    } else {
+      log("LEARNING for altitude %.2f") % alt;
     }
     // now learn the image
     learn_one(state, image, inpath, alt, pitch, roll);
@@ -373,15 +380,19 @@ void correct_task(WorkState* state, string inpath, double alt, double pitch, dou
     log("READ %s") % inpath;
     // determine altitude if necessary
     cv::Mat rgbImage;
-    if(state->should_rectify() && state->should_compute_alt(alt)) {
-      PointCloud pointCloud;
-      alt = alt_from_stereo(state, image, rgbImage, pointCloud);
-      log("STEREO altitude of %s is %.2f") % inpath % alt;
-      // correct unrectified color image
-      image = rgbImage;
-      // FIXME save pointcloud in appropriate place
-      string pc_outpath = learn_correct::construct_pointcloud_path(*params, inpath);
-      write_pointcloud(params, pointCloud, pc_outpath);
+    if(state->should_rectify()) {
+       if(state->should_compute_alt(alt)) {
+	 PointCloud pointCloud;
+	 alt = alt_from_stereo(state, image, rgbImage, pointCloud);
+	 log("STEREO altitude of %s is %.2f") % inpath % alt;
+	 // correct unrectified color image
+	 image = rgbImage;
+	 string pc_outpath = learn_correct::construct_pointcloud_path(*params, inpath);
+	 write_pointcloud(params, pointCloud, pc_outpath);
+       } else if(!params->color) {
+	 // still need to demosaic image in the rectifying, RAW case
+	 image = demosaic(image, params->bayer_pattern);
+       }
     } else {
       log("CORRECTING for altitude %.2f") % alt;
     }
