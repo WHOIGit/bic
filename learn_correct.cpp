@@ -491,13 +491,33 @@ std::string learn_correct::construct_pointcloud_path(learn_correct::Params p, st
   return outpath;
 }
 
-void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
+// the alt task computes alt from stereo and logs as CSV
+void alt_task(WorkState* state, string inpath) {
+  using cv::Mat;
+  Params* params = &state->params;
+  // get the input pathname
+  try  {
+    // read the image (this can be done in parallel)
+    Mat image = read_image(inpath, state);
+    // determine altitude if necessary
+    cv::Mat rgbImage;
+    PointCloud pointCloud;
+    float alt = alt_from_stereo(state, image, rgbImage, pointCloud);
+    log("%s,%.2f") % inpath % alt;
+  } catch(std::runtime_error const &e) {
+    log_error("ERROR in ALT for %s: %s") % inpath % e.what();
+  } catch(std::exception) {
+    log_error("ERROR in ALT for %s") % inpath;
+  }
+}
+
+void do_learn_correct(learn_correct::Params p, bool learn, bool correct, bool alt_only) {
   using learn_correct::Task;
   // before any OpenCV operations are done, set global error flag
   cv::setBreakOnError(true);
   WorkState state(p);
   bool adaptive = learn && correct;
-  if(p.lightmap_dir.empty() && !adaptive)
+  if(p.lightmap_dir.empty() && !adaptive && !alt_only)
     throw std::runtime_error("no lightmap directory specified for learn/correct operation");
   if(learn && !p.update.empty()) { // updating?
     state.resume(p.update);
@@ -568,6 +588,8 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
 	  // push a correct task on the queue
 	  io_service.post(boost::bind(correct_task, &state, task.inpath, task.alt, task.pitch, task.roll, outpath));
 	  log("QUEUED CORRECT %s") % task.inpath;
+	} else if(alt_only) {
+	  io_service.post(boost::bind(alt_task, &state, task.inpath));
 	}
       } catch(std::runtime_error const &e) {
 	log_error("ERROR parsing input metadata: %s: last line read was '%s'") % e.what() % line;
@@ -624,14 +646,19 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
 
 // learn phase
 void learn_correct::learn(learn_correct::Params p) {
-  do_learn_correct(p, true, false);
+  do_learn_correct(p, true, false, false);
 }
 
 void learn_correct::correct(learn_correct::Params p) {
-  do_learn_correct(p, false, true);
+  do_learn_correct(p, false, true, false);
 }
 
 // adaptive (learn + correct)
 void learn_correct::adaptive(learn_correct::Params p) {
-  do_learn_correct(p, true, true);
+  do_learn_correct(p, true, true, false);
+}
+
+// altitude calculation only
+void learn_correct::alt(learn_correct::Params p) {
+  do_learn_correct(p, false, false, true);
 }

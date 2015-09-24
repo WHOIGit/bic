@@ -319,6 +319,10 @@ namespace learn_correct {
    * learn/correct phase.
    */
   void adaptive(Params p);
+  /**
+   * Given application parameters, compute and log altitudes only
+   */
+  void alt(Params p);
   
   // parameters for each task
   class Task {

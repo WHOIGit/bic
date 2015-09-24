@@ -79,10 +79,10 @@ int main(int argc, char **argv) {
 	learn_correct::correct(params);
       } else if(command=="adaptive") {
 	learn_correct::adaptive(params);
+      } else if(command=="alt") {
+	learn_correct::alt(params);
       } else if(command=="flat") {
 	prototype::test_flatness(params);
-      } else if(command=="alt") {
-	utils::alt_from_stereo(params);
       } else if(command=="thumblight") {
 	utils::thumb_lightmap(params);
       } else if(command=="view") {
