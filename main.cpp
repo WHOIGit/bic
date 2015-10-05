@@ -44,6 +44,8 @@ int main(int argc, char **argv) {
     OPT(OPT_STEREO,"S",bool,true,"treat images as side-by-side stereo pairs")
     OPT(OPT_N_THREADS,"t",int,0,"number of threads")
     OPT(OPT_UPDATE,"u",string,"","update existing lightmap instead of creating new one (default: don't update a lightmap)")
+    OPT(OPT_CALIBRATION_DIR,"y",string,"","directory containing camera calibration matrices")
+    OPT(OPT_POINTCLOUD_PREFIX,"Y",string,"","prefix to prepend when constructing pointlcloud output pathnames")
     ;
   po::variables_map options;
   Params params;
@@ -77,10 +79,10 @@ int main(int argc, char **argv) {
 	learn_correct::correct(params);
       } else if(command=="adaptive") {
 	learn_correct::adaptive(params);
+      } else if(command=="alt") {
+	learn_correct::alt(params);
       } else if(command=="flat") {
 	prototype::test_flatness(params);
-      } else if(command=="alt") {
-	utils::alt_from_stereo(params);
       } else if(command=="thumblight") {
 	utils::thumb_lightmap(params);
       } else if(command=="view") {
@@ -111,6 +113,8 @@ int main(int argc, char **argv) {
 	prototype::test_rgb_learn(params);
       } else if(command=="rgb_correct") {
 	prototype::test_rgb_correct(params);
+      } else if(command=="test_rectify") {
+	prototype::test_rectify();
       } else {
 	cerr << "ERROR unknown command " << command << endl << copts << endl;
       }

@@ -20,6 +20,11 @@
 #include "interpolation.hpp"
 #include "logging.hpp"
 
+#include "StereoStructDefines.h"
+#include "AltitudeFromStereo.h"
+#include "RectifyImage.h"
+#include "DataIO.h"
+
 using std::string;
 
 namespace fs = boost::filesystem;
@@ -84,15 +89,19 @@ public:
   Params params;
   illum::MultiLightfield *model; // the lightfield
   stereo::CameraPair cameras; // the camera metrics
+  CameraMatrix cameraMatrix;
   WorkState(Params p) {
     params = p;
     cameras = CameraPair(p.camera_sep, p.focal_length, p.pixel_sep);
-    if(p.color) {
+    if(should_rectify()) {
+      ReadCameraMatrices(p.calibration_dir,cameraMatrix);
+      log("READ calibration matrices from %s") % p.calibration_dir;
+    }
+    if(color_lightfield()) {
       model = new ColorLightfield(p.alt_spacing, p.undertrain, p.overtrain);
     } else {
       model = new GrayLightfield(p.alt_spacing, p.undertrain, p.overtrain);
     }
-    // model = illum::VehicleLightfield(p.alt_spacing, cameras)
   }
   // checkpoint the current state of a learn process
   void checkpoint(string _outdir="") {
@@ -151,16 +160,25 @@ public:
   bool should_skip(string inpath) {
     return skip.count(inpath) > 0;
   }
+  bool should_rectify() {
+    return !params.calibration_dir.empty();
+  }
+  bool color_lightfield() {
+    return params.color || should_rectify();
+  }
+  bool should_compute_alt(double alt) {
+    if(!params.stereo)
+      return false;
+    if(!params.alt_from_parallax && alt > 0 && alt < MAX_ALTITUDE)
+      return false;
+    return true;
+  }
 };
 
 double compute_missing_alt(WorkState* state, double alt, cv::Mat cfa_LR, std::string inpath) {
   using stereo::align;
   using cv::Mat;
-  // if images are not stereo, do not attempt to compute altitude from parallax
-  if(!state->params.stereo)
-    return alt;
-  // if altitude is good, don't recompute it
-  if(!state->params.alt_from_parallax && alt > 0 && alt < MAX_ALTITUDE)
+  if(!state->should_compute_alt(alt))
     return alt;
   // compute from parallax
   // pull green channel
@@ -185,7 +203,7 @@ double compute_missing_alt(WorkState* state, double alt, cv::Mat cfa_LR, std::st
 cv::Mat read_image(string inpath, WorkState *state) {
   cv::Mat img;
   if(!state->params.color) {
-    img = cv::imread(inpath, CV_LOAD_IMAGE_ANYDEPTH);
+    img = cv::imread(inpath, CV_LOAD_IMAGE_ANYCOLOR | CV_LOAD_IMAGE_ANYDEPTH);
     if(img.type() != CV_16U)
       throw std::runtime_error(str(format("ERROR: image is not 16-bit grayscale: %s") % inpath));
   } else {
@@ -205,9 +223,22 @@ void learn_one(WorkState* state, cv::Mat cfa_LR, string inpath, double alt=0, do
   }
 }
 
+double alt_from_stereo(WorkState* state, cv::Mat image, cv::Mat &rgbImage, PointCloud &pointCloud) {
+  cv::Mat rectified;
+  if(!state->params.color) {
+    rgbImage = demosaic(image, state->params.bayer_pattern);
+  } else {
+    rgbImage = image;
+  }
+  double alt = AltitudeFromStereo(rgbImage, state->cameraMatrix, rectified, pointCloud,
+				  false, false, false, false) / 1000.0;
+  return alt;
+}
+
 // the learn task adds an image to a multilightfield model
 void learn_task(WorkState* state, string inpath, double alt, double pitch, double roll) {
   using cv::Mat;
+  Params* params = &state->params;
   // get the input pathname
   try  {
     log("START LEARN %s %.2f,%.2f,%.2f") % inpath % alt % pitch % roll;
@@ -215,7 +246,22 @@ void learn_task(WorkState* state, string inpath, double alt, double pitch, doubl
     Mat image = read_image(inpath, state);
     log("READ %s") % inpath;
     // determine altitude if necessary
-    alt = compute_missing_alt(state, alt, image, inpath);
+    cv::Mat rgbImage;
+    if(state->should_rectify()) {
+      if(state->should_compute_alt(alt)) {
+	PointCloud pointCloud;
+	alt = alt_from_stereo(state, image, rgbImage, pointCloud);
+	log("STEREO altitude of %s is %.2f") % inpath % alt;
+	// learn unrectified color image
+	image = rgbImage;
+	// note: discards pointcloud
+      } else if(!params->color) {
+	// still need to demosaic image in the rectifying, RAW case
+	image = demosaic(image, params->bayer_pattern);
+      }
+    } else {
+      log("LEARNING for altitude %.2f") % alt;
+    }
     // now learn the image
     learn_one(state, image, inpath, alt, pitch, roll);
     log("LEARNED %s") % inpath;
@@ -259,7 +305,7 @@ cv::Mat correct_one(WorkState* state, cv::Mat image, string inpath, double alt, 
   }
   // correct, handling color/gray cases
   Mat rgb_image;
-  if(params->color) {
+  if(state->color_lightfield()) {
     illum::color_correct(image, rgb_image, average); // correct it
   } else {
     Mat mosaiced;
@@ -267,6 +313,10 @@ cv::Mat correct_one(WorkState* state, cv::Mat image, string inpath, double alt, 
     // demosaic it
     log("DEMOSAICING %s") % inpath;
     rgb_image = demosaic(mosaiced,params->bayer_pattern);
+  }
+  // finally, rectify the image
+  if(state->should_rectify()) {
+    rgb_image = RectifyImage(rgb_image, state->cameraMatrix, false, false);
   }
   // brightness and contrast parameters
   double max = params->max_brightness;
@@ -304,6 +354,19 @@ void write_corrected(Params* params, cv::Mat corrected, string outpath) {
     throw std::runtime_error(str(format("ERROR: unable to write output image to %s") % outpath));
 }
 
+void write_pointcloud(Params* params, PointCloud pc, string outpath) {
+  if(params->pointcloud_prefix.empty())
+    return;
+  fs::path outp(outpath);
+  fs::path outdir = outp.parent_path();
+  if(params->create_directories)
+    fs::create_directories(outdir);
+  // now write the output image
+  log("SAVING pointcloud to %s") % outpath;
+  cv::Mat ignored;
+  WritePointCloud(outpath, pc, ignored, PC_BINARY);
+}
+
 // the correct task corrects images
 void correct_task(WorkState* state, string inpath, double alt, double pitch, double roll, string outpath) {
   using cv::Mat;
@@ -315,9 +378,24 @@ void correct_task(WorkState* state, string inpath, double alt, double pitch, dou
     // read image
     Mat image = read_image(inpath, state);
     log("READ %s") % inpath;
-    // if altitude is out of range, compute from parallax
-    alt = compute_missing_alt(state, alt, image, inpath);
-    log("CORRECTING for altitude %.2f") % alt;
+    // determine altitude if necessary
+    cv::Mat rgbImage;
+    if(state->should_rectify()) {
+       if(state->should_compute_alt(alt)) {
+	 PointCloud pointCloud;
+	 alt = alt_from_stereo(state, image, rgbImage, pointCloud);
+	 log("STEREO altitude of %s is %.2f") % inpath % alt;
+	 // correct unrectified color image
+	 image = rgbImage;
+	 string pc_outpath = learn_correct::construct_pointcloud_path(*params, inpath);
+	 write_pointcloud(params, pointCloud, pc_outpath);
+       } else if(!params->color) {
+	 // still need to demosaic image in the rectifying, RAW case
+	 image = demosaic(image, params->bayer_pattern);
+       }
+    } else {
+      log("CORRECTING for altitude %.2f") % alt;
+    }
     // now correct the image
     Mat corrected_image = correct_one(state, image, inpath, alt, pitch, roll);
     // now write corrected image to outpath
@@ -385,30 +463,61 @@ std::istream* learn_correct::get_input(learn_correct::Params p) {
   }
 }
 
-std::string learn_correct::construct_outpath(learn_correct::Params p, string inpath) {
+std::string learn_correct::construct_path(string in_prefix, string out_prefix, string inpath) {
   using boost::algorithm::replace_first;
-  using boost::algorithm::ends_with;
   string outpath;
   if(inpath.empty())
-    throw std::runtime_error("cannot construct output pathname from empty input pathname");
-  if(!p.path_prefix_in.empty()) {
+    throw std::runtime_error("cannot construct path from empty input pathname");
+  if(!in_prefix.empty()) {
     outpath = inpath;
-    replace_first(outpath, p.path_prefix_in, p.path_prefix_out);
-  } else if(!p.path_prefix_out.empty()) {
-    outpath = p.path_prefix_out + inpath;
+    replace_first(outpath, in_prefix, out_prefix);
+  } else if(!out_prefix.empty()) {
+    outpath = out_prefix + inpath;
   }
+  return outpath;
+}
+
+std::string learn_correct::construct_outpath(learn_correct::Params p, string inpath) {
+  string outpath = learn_correct::construct_path(p.path_prefix_in, p.path_prefix_out, inpath);
   boost::regex re("\\.tiff?$", boost::regex::icase);
   outpath = regex_replace(outpath,re,".png");
   return outpath;
 }
 
-void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
+std::string learn_correct::construct_pointcloud_path(learn_correct::Params p, string inpath) {
+  string outpath = learn_correct::construct_path(p.path_prefix_in, p.pointcloud_prefix, inpath);
+  boost::regex re("\\.tiff?$", boost::regex::icase);
+  outpath = regex_replace(outpath,re,"");
+  return outpath;
+}
+
+// the alt task computes alt from stereo and logs as CSV
+void alt_task(WorkState* state, string inpath) {
+  using cv::Mat;
+  Params* params = &state->params;
+  // get the input pathname
+  try  {
+    // read the image (this can be done in parallel)
+    Mat image = read_image(inpath, state);
+    // determine altitude if necessary
+    cv::Mat rgbImage;
+    PointCloud pointCloud;
+    float alt = alt_from_stereo(state, image, rgbImage, pointCloud);
+    log("%s,%.2f") % inpath % alt;
+  } catch(std::runtime_error const &e) {
+    log_error("ERROR in ALT for %s: %s") % inpath % e.what();
+  } catch(std::exception) {
+    log_error("ERROR in ALT for %s") % inpath;
+  }
+}
+
+void do_learn_correct(learn_correct::Params p, bool learn, bool correct, bool alt_only) {
   using learn_correct::Task;
   // before any OpenCV operations are done, set global error flag
   cv::setBreakOnError(true);
   WorkState state(p);
   bool adaptive = learn && correct;
-  if(p.lightmap_dir.empty() && !adaptive)
+  if(p.lightmap_dir.empty() && !adaptive && !alt_only)
     throw std::runtime_error("no lightmap directory specified for learn/correct operation");
   if(learn && !p.update.empty()) { // updating?
     state.resume(p.update);
@@ -479,6 +588,8 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
 	  // push a correct task on the queue
 	  io_service.post(boost::bind(correct_task, &state, task.inpath, task.alt, task.pitch, task.roll, outpath));
 	  log("QUEUED CORRECT %s") % task.inpath;
+	} else if(alt_only) {
+	  io_service.post(boost::bind(alt_task, &state, task.inpath));
 	}
       } catch(std::runtime_error const &e) {
 	log_error("ERROR parsing input metadata: %s: last line read was '%s'") % e.what() % line;
@@ -535,14 +646,19 @@ void do_learn_correct(learn_correct::Params p, bool learn, bool correct) {
 
 // learn phase
 void learn_correct::learn(learn_correct::Params p) {
-  do_learn_correct(p, true, false);
+  do_learn_correct(p, true, false, false);
 }
 
 void learn_correct::correct(learn_correct::Params p) {
-  do_learn_correct(p, false, true);
+  do_learn_correct(p, false, true, false);
 }
 
 // adaptive (learn + correct)
 void learn_correct::adaptive(learn_correct::Params p) {
-  do_learn_correct(p, true, true);
+  do_learn_correct(p, true, true, false);
+}
+
+// altitude calculation only
+void learn_correct::alt(learn_correct::Params p) {
+  do_learn_correct(p, false, false, true);
 }

@@ -19,6 +19,10 @@
 #include "stereo.hpp"
 #include "logging.hpp"
 
+#include "StereoStructDefines.h"
+#include "AltitudeFromStereo.h"
+#include "DataIO.h"
+
 namespace fs = boost::filesystem;
 
 using namespace std;
@@ -654,4 +658,37 @@ void prototype::redcyan(learn_correct::Params params) {
   imshow( "Display Image", redcyan );
 
   waitKey(0);
+}
+
+void prototype::test_rectify() {
+  CameraMatrix cameraMatrix;
+
+  cout << "Reading camera matrices" << endl;
+  ReadCameraMatrices("/vagrant/2014CalibrationData",cameraMatrix);
+  cout << "Done reading camera matrices" << endl;
+
+  cout << "Reading image..." << endl;
+  cv::Mat image = cv::imread("/vagrant/201303.20130627.170721501.285862.tif",
+			     CV_LOAD_IMAGE_ANYCOLOR | CV_LOAD_IMAGE_ANYDEPTH);
+  cout << "Done reading image" << endl;
+
+  cout << "Debayering..." << endl;
+  image = demosaic(image,"rggb");
+  cout << "Done debayering" << endl;
+
+  cv::Mat rectified;
+  PointCloud pointCloud;
+
+  cout << "Computing altitude from stereo..." << endl;
+  float alt = AltitudeFromStereo(image, cameraMatrix, rectified, pointCloud,
+				 false, false, false, false);
+  cout << "Computed altitude is " << alt << "mm" << endl;
+
+  cout << "Writing rectified image" << endl;
+  cv::imwrite("/vagrant/rectified.png",rectified);
+  cout << "Done writing rectified image" << endl;
+
+  cout << "Writing point cloud" << endl;
+  WritePointCloud("/vagrant/pointcloud", pointCloud, cv::Mat(), PC_BINARY);
+  cout << "Done writing point cloud" << endl;
 }
